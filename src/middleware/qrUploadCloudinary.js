@@ -7,7 +7,7 @@ const storage = new CloudinaryStorage({
   params: {
     folder: "school_erp/qr",
     allowed_formats: ["jpg", "png", "jpeg", "webp"],
-    public_id: "school_qr", // same name → overwrite
+    public_id: () => `school_qr_${Date.now()}`, // ✅ FIX
   },
 });
 
