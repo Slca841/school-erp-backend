@@ -19,14 +19,13 @@ import homeworkRouter from "./routes/HomeworkRoute.js";
 import subjectAssginRouter from "./routes/teacherSubjectRoutes.js";
 import eventRouter from "./routes/event.js";
 import schoolRouter from "./routes/schoolRoutes.js";
-
-import "dotenv/config";
 import { sendFeeReminder } from "./controllers/feeReminderController.js";
 import helmet from "helmet";
 import compression from "compression";
+import "dotenv/config";
 
 
-
+dotenv.config();  
 const app = express();
 app.use(express.json());
 app.use(
