@@ -1,7 +1,7 @@
 import express from "express";
 import Notice from "../models/Notice.js";
 import { noticeUpload } from "../middleware/noticeUploadCloudinary.js";
-import cloudinary from "./cloudinary.js";
+import cloudinary from "../utils/cloudinary.js";
 const noticeRoutes = express.Router();
 
 /**
