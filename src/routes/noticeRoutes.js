@@ -26,10 +26,10 @@ noticeRoutes.post(
         createdBy,
       };
 
-      if (req.file) {
-        noticeData.image = req.file.path;
-        noticeData.imagePublicId = req.file.filename;
-      }
+  if (req.file) {
+  noticeData.image = req.file.path;              // ✅ Cloudinary URL
+  noticeData.imagePublicId = req.file.public_id; // ✅ correct
+}
 
       const notice = await Notice.create(noticeData);
 

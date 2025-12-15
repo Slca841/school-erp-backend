@@ -381,10 +381,7 @@ dateOfAdmission: fixDate(r.dateofadmission) || new Date(),
             apaarId: r.apaarid || "",
 
             address: r.address || "",
-            discount: r.discount || 0,
-            yearlyFee: r.yearlyfee || 0,
-
-            guardian: guardianData,
+             guardian: guardianData,
           });
         }
 
