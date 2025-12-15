@@ -4,12 +4,8 @@ const noticeSchema = new mongoose.Schema(
   {
     title: String,
     message: String,
-
-    image: {
-      type: String,
-      default: null,
-    },
-
+image: String,          
+imagePublicId: String,
     targetType: String,
     targetClass: String,
 

@@ -1,36 +1,36 @@
 import express from "express";
 import School from "../models/School.js";
-import { qrUpload } from "../middleware/multerMiddleware.js";
+import { qrUpload } from "../middleware/qrUploadCloudinary.js";
 
 const schoolRouter = express.Router();
 
-/**
- * 🔳 CREATE / UPDATE SCHOOL QR (SINGLE)
- */
-schoolRouter.put(
-  "/qr",
-  qrUpload.single("qr"),
-  async (req, res) => {
-    try {
-      const qrPath = req.file
-        ? `/uploads/qr/${req.file.filename}`
-        : null;
+schoolRouter.put("/qr", qrUpload.single("qr"), async (req, res) => {
+  try {
+    const qrUrl = req.file?.path; // Cloudinary URL
 
-      const school = await School.findOne();
-
-      if (!school) {
-        await School.create({ qrImage: qrPath });
-      } else {
-        school.qrImage = qrPath;
-        await school.save();
-      }
-
-      res.json({ success: true, message: "QR updated", qr: qrPath });
-    } catch (err) {
-      res.status(500).json({ success: false, message: err.message });
+    if (!qrUrl) {
+      return res.status(400).json({ success: false, message: "QR not uploaded" });
     }
+
+    let school = await School.findOne();
+    if (!school) {
+      school = await School.create({ qrImage: qrUrl });
+    } else {
+      school.qrImage = qrUrl;
+      await school.save();
+    }
+
+    res.json({
+      success: true,
+      message: "QR updated",
+      qrImage: qrUrl,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
-);
+});
+
+
 // 🔍 Get Current School QR
 schoolRouter.get("/qr", async (req, res) => {
   try {

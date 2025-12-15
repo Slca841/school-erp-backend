@@ -1,9 +1,7 @@
 import express from "express";
 import Notice from "../models/Notice.js";
-import { noticeUpload } from "../middleware/multerMiddleware.js";
-import fs from "fs";
-import path from "path";
-
+import { noticeUpload } from "../middleware/noticeUploadCloudinary.js";
+import cloudinary from "./cloudinary.js";
 const noticeRoutes = express.Router();
 
 /**
@@ -17,9 +15,7 @@ noticeRoutes.post(
       const { title, message, targetType, targetClass, createdBy } = req.body;
 
       if (!title || !message || !targetType) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Required fields missing" });
+        return res.status(400).json({ success: false, message: "Required fields missing" });
       }
 
       const noticeData = {
@@ -30,14 +26,13 @@ noticeRoutes.post(
         createdBy,
       };
 
-      // ✅ image sirf tab add hogi jab bheji ho
       if (req.file) {
-        noticeData.image = `/uploads/notices/${req.file.filename}`;
+        noticeData.image = req.file.path;
+        noticeData.imagePublicId = req.file.filename;
       }
 
       const notice = await Notice.create(noticeData);
 
-      // 🔔 SOCKET EMIT
       const io = req.app.get("io");
       if (io) {
         setTimeout(() => {
@@ -53,11 +48,11 @@ noticeRoutes.post(
 
       res.status(201).json({ success: true, notice });
     } catch (err) {
-      console.error("❌ Notice create error:", err);
       res.status(500).json({ success: false, message: err.message });
     }
   }
 );
+
 
 /**
  * 🧩 STUDENT NOTICES
@@ -122,16 +117,12 @@ noticeRoutes.delete("/delete/:id", async (req, res) => {
       });
     }
 
-    // ✅ IMAGE DELETE (agar exist karti hai)
-    if (notice.image) {
-      const imagePath = path.join(process.cwd(), notice.image);
-
-      if (fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
-      }
+    // ✅ DELETE IMAGE FROM CLOUDINARY
+    if (notice.imagePublicId) {
+      await cloudinary.uploader.destroy(notice.imagePublicId);
     }
 
-    // ✅ DB DELETE
+    // ✅ DELETE FROM DB
     await Notice.findByIdAndDelete(req.params.id);
 
     res.json({
@@ -146,6 +137,7 @@ noticeRoutes.delete("/delete/:id", async (req, res) => {
     });
   }
 });
+
 
 
 /**
