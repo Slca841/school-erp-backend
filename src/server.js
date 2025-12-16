@@ -20,10 +20,9 @@ import homeworkRouter from "./routes/HomeworkRoute.js";
 import subjectAssginRouter from "./routes/teacherSubjectRoutes.js";
 import eventRouter from "./routes/event.js";
 import schoolRouter from "./routes/schoolRoutes.js";
-import { sendFeeReminder } from "./controllers/feeReminderController.js";
 import helmet from "helmet";
 import compression from "compression";
- 
+import secureRouter from "./routes/authRoutes.js"
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); 
@@ -154,7 +153,7 @@ app.use("/api/notification", notificationRouter);
 app.use("/api/subject", subjectAssginRouter);
 app.use("/api/event", eventRouter);
 app.use("/api/school", schoolRouter);
-
+app.use("/api/secure", secureRouter);
 // Fee router
 app.use(
   "/api/fee",
