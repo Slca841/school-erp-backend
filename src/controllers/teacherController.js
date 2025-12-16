@@ -1,3 +1,5 @@
+import bcrypt from "bcrypt";
+
 // controllers/teacherController.js
 import Teacher from "../models/TeacherModel.js";
 import TeacherComplaint from "../models/TeacherComplaint.js";
@@ -43,23 +45,43 @@ export const getTeacherById = async (req, res) => {
 };
 
 // ✅ Update teacher
+
 export const updateTeacher = async (req, res) => {
   try {
     const { id } = req.params;
+    const { name, email, password, ...teacherData } = req.body;
 
-    const teacher = await Teacher.findByIdAndUpdate(id, req.body, { new: true })
-      .populate("userId", "name email originalPassword");
+    const teacher = await Teacher.findByIdAndUpdate(
+      id,
+      teacherData,
+      { new: true }
+    );
 
     if (!teacher) {
       return res.status(404).json({ success: false, message: "Teacher not found" });
     }
+
+    if (teacher.userId) {
+      const updateUser = {};
+
+      if (name) updateUser.name = name;
+      if (email) updateUser.email = email;
+
+      if (password && password.trim() !== "") {
+        const hashed = await bcrypt.hash(password, 10);
+        updateUser.password = hashed;
+        updateUser.originalPassword = password;
+      }
+
+      await User.findByIdAndUpdate(teacher.userId, updateUser);
+    }
+
     res.json({ success: true, teacher });
   } catch (err) {
-    console.error("❌ updateTeacher error:", err.message);
+    console.error("❌ updateTeacher error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 
 
 export const deleteTeacher = async (req, res) => {

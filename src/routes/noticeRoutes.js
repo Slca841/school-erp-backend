@@ -1,7 +1,8 @@
 import express from "express";
 import Notice from "../models/Notice.js";
-import { noticeUpload } from "../middleware/noticeUploadCloudinary.js";
+import {noticeUpload} from "../middleware/noticeUploadCloudinary.js";
 import cloudinary from "../utils/cloudinary.js";
+
 const noticeRoutes = express.Router();
 
 /**
@@ -27,8 +28,8 @@ noticeRoutes.post(
       };
 
   if (req.file) {
-  noticeData.image = req.file.path;              // ✅ Cloudinary URL
-  noticeData.imagePublicId = req.file.public_id; // ✅ correct
+  noticeData.image = req.file.path;              
+ noticeData.imagePublicId = req.file.filename; 
 }
 
       const notice = await Notice.create(noticeData);

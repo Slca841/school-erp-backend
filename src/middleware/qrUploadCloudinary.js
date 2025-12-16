@@ -4,11 +4,13 @@ import cloudinary from "../utils/cloudinary.js";
 
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: {
+  params: async (req, file) => ({
     folder: "school_erp/qr",
-    allowed_formats: ["jpg", "png", "jpeg", "webp"],
-    public_id: () => `school_qr_${Date.now()}`, // ✅ FIX
-  },
+    public_id: "school_qr",   // ✅ SAME ID
+    overwrite: true,          // ✅ FORCE OVERWRITE
+    invalidate: true,         // ✅ CDN cache clear
+    resource_type: "image",
+  }),
 });
 
 export const qrUpload = multer({ storage });

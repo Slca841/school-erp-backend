@@ -1,5 +1,4 @@
-import dotenv from "dotenv";
-dotenv.config();
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import http from "http";
@@ -27,6 +26,7 @@ import compression from "compression";
  
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); 
 app.use(
   cors({
     origin: process.env.CLIENT_URL || "*",
@@ -140,8 +140,6 @@ io.on("connection", (socket) => {
 // ----------------------
 // API ROUTES
 // ----------------------
-app.use("/uploads", express.static("uploads"));
-
 app.use("/api/user", userRouter);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/leave", leaveRoutes);
@@ -179,5 +177,5 @@ app.get("/", (req, res) => {
 // ----------------------
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port http://10.167.198.238:${PORT}`);
 });
