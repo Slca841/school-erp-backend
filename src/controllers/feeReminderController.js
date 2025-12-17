@@ -40,15 +40,19 @@ export const sendFeeReminder = async (req, res) => {
         const message = `Dear ${student.fullName}, please submit your pending fees.`
 
         // ⭐ Save or Update reminder (ALWAYS only 1)
-        const newReminder = await FeeReminder.findOneAndUpdate(
-          { studentId: student._id },
-          {
-            message,
-            totalPaid,
-            targetFee,
-          },
-          { new: true, upsert: true }
-        );
+    const newReminder = await FeeReminder.findOneAndUpdate(
+  { studentId: student._id },
+  {
+    message,
+    totalPaid,
+    targetFee,
+
+    // ⭐ IMPORTANT
+    read: false,
+  },
+  { new: true, upsert: true }
+);
+
 
         // ⭐ Delete duplicates (safe)
         await FeeReminder.deleteMany({
@@ -101,6 +105,38 @@ export const sendFeeReminder = async (req, res) => {
       success: true,
       reminder, // only 1
     });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+export const markFeeReminderRead = async (req, res) => {
+  try {
+    const { studentId } = req.body;
+
+    if (!studentId)
+      return res.status(400).json({
+        success: false,
+        message: "studentId required",
+      });
+
+    await FeeReminder.updateMany(
+      { studentId, read: false },
+      { $set: { read: true } }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+export const getUnreadFeeReminderCount = async (req, res) => {
+  try {
+    const count = await FeeReminder.countDocuments({
+      studentId: req.params.studentId,
+      read: false,
+    });
+
+    res.json({ success: true, unreadCount: count });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

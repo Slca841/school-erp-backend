@@ -18,7 +18,8 @@ const FeeReminderSchema = new mongoose.Schema(
     targetFee: {
       type: Number,
       required: true,
-    }
+    },
+      read: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

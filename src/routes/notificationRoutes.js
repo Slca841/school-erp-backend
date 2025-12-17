@@ -127,5 +127,32 @@ notificationRouter.get("/unread/count", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+/**
+ * ✅ 5. Mark student notices as read
+ * Route: POST /api/notification/mark-student-notice-read
+ * Body: { studentId, noticeIds: [] }
+ */
+notificationRouter.post("/mark-student-notice-read", async (req, res) => {
+  try {
+    const { studentId, noticeIds } = req.body;
+
+    if (!studentId || !Array.isArray(noticeIds)) {
+      return res.status(400).json({
+        success: false,
+        message: "studentId and noticeIds required",
+      });
+    }
+
+    await Notice.updateMany(
+      { _id: { $in: noticeIds } },
+      { $addToSet: { readBy: String(studentId) } }
+    );
+
+    res.json({ success: true, message: "Student notices marked as read" });
+  } catch (err) {
+    console.error("❌ Student mark read error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 export default notificationRouter;
