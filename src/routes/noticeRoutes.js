@@ -3,6 +3,27 @@ import Notice from "../models/Notice.js";
 import {noticeUpload} from "../middleware/noticeUploadCloudinary.js";
 import cloudinary from "../utils/cloudinary.js";
 
+
+const attachSenderName = (notices) => {
+  return notices.map((n) => {
+    let senderName = "System";
+
+    if (n.createdBy?.role === "admin") {
+      senderName = "Admin";
+    }
+
+    if (n.createdBy?.role === "teacher") {
+      senderName = "Class Teacher";
+    }
+
+    return {
+      ...n.toObject(),
+      senderName,
+    };
+  });
+};
+
+
 const noticeRoutes = express.Router();
 
 /**
@@ -32,22 +53,34 @@ noticeRoutes.post(
  noticeData.imagePublicId = req.file.filename; 
 }
 
-      const notice = await Notice.create(noticeData);
+const notice = await Notice.create(noticeData);
 
-      const io = req.app.get("io");
-      if (io) {
-        setTimeout(() => {
-          if (targetType === "all") {
-            io.emit("new_notice_all", { notice });
-          } else if (targetType === "class" && targetClass) {
-            io.to(`class_${targetClass}`).emit("new_notice_student", { notice });
-          } else if (targetType === "teachers") {
-            io.to("teachers").emit("new_notice_teacher", { notice });
-          }
-        }, 300);
-      }
+// ✅ ADD THIS
+const populated = await Notice.findById(notice._id)
+  .populate("createdBy", "role");
 
-      res.status(201).json({ success: true, notice });
+const [finalNotice] = await attachSenderName([populated]);
+
+const io = req.app.get("io");
+if (io) {
+  setTimeout(() => {
+    if (targetType === "all") {
+      io.emit("new_notice_all", { notice: finalNotice });
+    } else if (targetType === "class" && targetClass) {
+      io.to(`class_${targetClass}`).emit("new_notice_student", {
+        notice: finalNotice,
+      });
+    } else if (targetType === "teachers") {
+      io.to("teachers").emit("new_notice_teacher", {
+        notice: finalNotice,
+      });
+    }
+  }, 300);
+}
+
+// 🔥 RESPONSE bhi populated bhejo
+res.status(201).json({ success: true, notice: finalNotice });
+
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -60,38 +93,50 @@ noticeRoutes.post(
  */
 noticeRoutes.get("/student/:className", async (req, res) => {
   try {
-    const { className } = req.params;
+     const notices = await Notice.find({
+    $or: [
+      { targetType: "all" },
+      { targetType: "class", targetClass: new RegExp(`^${className}$`, "i") },
+    ],
+  })
+    .populate("createdBy", "role");
 
-    const notices = await Notice.find({
-      $or: [
-        { targetType: "all" },
-        { targetType: "class", targetClass: new RegExp(`^${className}$`, "i") },
-      ],
-    }).sort({ createdAt: -1 });
+  const finalNotices = await attachSenderName(notices);
 
-    res.json({ success: true, notices });
+  res.json({ success: true, notices: finalNotices });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
+
 /**
  * 🧩 TEACHER NOTICES
  */
+
 noticeRoutes.get("/teacher", async (req, res) => {
-  const notices = await Notice.find({ targetType: "teachers" }).sort({
-    createdAt: -1,
-  });
-  res.json({ success: true, notices });
+  const notices = await Notice.find({ targetType: "teachers" })
+    .populate("createdBy", "role");
+
+  const finalNotices = await attachSenderName(notices);
+
+  res.json({ success: true, notices: finalNotices });
 });
+
+
 
 /**
  * 🧩 ADMIN ALL
  */
 noticeRoutes.get("/all", async (req, res) => {
-  const notices = await Notice.find().populate("createdBy", "fullName role");
-  res.json({ success: true, notices });
+  const notices = await Notice.find()
+    .populate("createdBy", "role");
+
+  const finalNotices = await attachSenderName(notices);
+
+  res.json({ success: true, notices: finalNotices });
 });
+
 
 /**
  * 🧩 UPDATE NOTICE (TEXT ONLY)
@@ -145,30 +190,25 @@ noticeRoutes.delete("/delete/:id", async (req, res) => {
  * 🧩 7. Get Notices created by a specific Teacher
  */
 noticeRoutes.get("/teacher/:teacherId", async (req, res) => {
-  try {
- const { teacherId } = req.params;
+  const notices = await Notice.find({ createdBy: req.params.teacherId })
+    .populate("createdBy", "role");
 
-  const notices = await Notice.find({ createdBy: teacherId }).sort({
-    createdAt: -1,
-  });
+  const finalNotices = await attachSenderName(notices);
 
-  res.json({ success: true, notices });
-  } catch (err) {
-    console.error("❌ Error fetching teacher notices:", err);
-    res.status(500).json({ success: false, message: err.message });
-  }
+  res.json({ success: true, notices: finalNotices });
 });
+
+
 
 noticeRoutes.get("/only-teachers", async (req, res) => {
-  try {
-    const notices = await Notice.find({ targetType: "teachers" })
-      .sort({ createdAt: -1 });
+  const notices = await Notice.find({ targetType: "teachers" })
+    .populate("createdBy", "role");
 
-    res.json({ success: true, notices });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
+  const finalNotices = await attachSenderName(notices);
+
+  res.json({ success: true, notices: finalNotices });
 });
+
 
 
 export default noticeRoutes;
