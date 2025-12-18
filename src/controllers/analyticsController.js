@@ -19,25 +19,24 @@ import TeacherComplaint from "../models/TeacherComplaint.js";
 import LeaveApplication from "../models/LeaveApplication.js";
 import Notice from "../models/Notice.js";
 import FeeReminder from "../models/FeeReminderModel.js";
-import TransferCertificate from "../models/tcGenerator.js";
 
 const deleteOldStudentData = async (studentId, oldClass) => {
   try {
-    await Attendance.updateMany(
-      {},
-      { $pull: { students: { studentId } } }
-    );
+  await Attendance.updateMany(
+    {},
+    { $pull: { students: { studentId } } },
+    { session }
+  );
 
-    await Homework.deleteMany({ classId: oldClass });
-    await TeacherComplaint.deleteMany({ studentId });
-    await LeaveApplication.deleteMany({ studentId });
-    await Notice.deleteMany({ targetClass: oldClass });
-    await FeeReminder.deleteMany({ studentId });
+  await Homework.deleteMany({ classId: oldClass }, { session });
+  await TeacherComplaint.deleteMany({ studentId }, { session });
+  await LeaveApplication.deleteMany({ studentId }, { session });
+  await Notice.deleteMany({ targetClass: oldClass }, { session });
+  await FeeReminder.deleteMany({ studentId }, { session });
   } catch (err) {
     console.error("❌ Error deleting old student data:", err);
   }
 };
-
 
 /* -------------------------------------------------------------------------- */
 /* 🧮 FEE CALCULATION (SINGLE SOURCE OF TRUTH) */
@@ -426,7 +425,6 @@ export const getSingleStudentWithFeeDetails = async (req, res) => {
     );
     if (!student)
       return res.json({ success: false, message: "Student not found" });
-const tc = await TransferCertificate.findOne({ studentId: id });
 
     const fee = await StudentFees.findOne({ studentId: id });
     const classFee = await ClassFeeMaster.findOne({
@@ -448,6 +446,7 @@ res.json({
     yearlyFee: effective.yearlyFee,
     previousYearFee: effective.previousYearFee,
 
+    // 🔥 SEND BREAKUP
     examFee: effective.examFee,
     admissionFee: effective.admissionFee,
     smartClassFee: effective.smartClassFee,
@@ -459,17 +458,13 @@ res.json({
 
     otherFees: effective.otherFees,
     discount: effective.discount,
-
-    // 🔥 SWITCH SOURCE BASED ON TC
     totalFee: effective.totalFee,
-    totalPaid: tc ? tc.totalPaid : totalPaid,
-    remainingFee: effective.totalFee - totalPaid,
 
-    monthlyPayments: tc ? [] : payments,
-    isTC: !!tc,
+    totalPaid,
+    remainingFee: effective.totalFee - totalPaid,
+    monthlyPayments: payments,
   },
 });
-
 
   } catch (err) {
     console.error("❌ getSingleStudentWithFeeDetails error:", err);
@@ -617,20 +612,50 @@ export const getActiveStudents = async (req, res) => {
 /* 🔴 TC APPROVED STUDENTS */
 export const getTCStudents = async (req, res) => {
   try {
-    const tcs = await TransferCertificate.find()
-      .populate("studentId", "fullName studentclass studentFatherName contact1");
+    const students = await Student.find({ status: "TC_APPROVED" });
 
-    const data = tcs.map((tc) => ({
-      _id: tc.studentId._id,
-      fullName: tc.studentId.fullName,
-      studentclass: tc.studentId.studentclass,
-      studentFatherName: tc.studentId.studentFatherName,
-      contact1: tc.studentId.contact1,
+    const fees = await StudentFees.find();
+    const payments = await StudentFeePayment.find();
 
-      totalFee: tc.totalFee,
-      totalPaid: tc.totalPaid,
-      remainingFee: tc.remainingFee,
-    }));
+    const data = await Promise.all(
+      students.map(async (s) => {
+        const fee = fees.find(
+          (f) => f.studentId.toString() === s._id.toString()
+        );
+
+        const classFee = await ClassFeeMaster.findOne({
+          className: s.studentclass,
+        });
+
+        const effective = getEffectiveFee(fee, classFee);
+
+        const paid = payments.filter(
+          (p) => p.studentId.toString() === s._id.toString()
+        );
+
+        const totalPaid = paid.reduce(
+          (sum, p) => sum + (p.paidAmount || 0),
+          0
+        );
+
+        return {
+          _id: s._id,
+          fullName: s.fullName,
+          studentclass: s.studentclass,
+          studentFatherName: s.studentFatherName,
+          contact1: s.contact1,
+
+          yearlyFee: effective.yearlyFee,
+          previousYearFee: effective.previousYearFee,
+          otherFees: effective.otherFees,
+          discount: effective.discount,
+          totalFee: effective.totalFee,
+
+          totalPaid,
+          remainingFee: effective.totalFee - totalPaid,
+        };
+      })
+    );
 
     res.json({ success: true, students: data });
   } catch (err) {
@@ -638,5 +663,4 @@ export const getTCStudents = async (req, res) => {
     res.status(500).json({ success: false });
   }
 };
-
 

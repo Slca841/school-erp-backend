@@ -6,7 +6,6 @@ const transferCertificateSchema = new mongoose.Schema({
   approved: { type: Boolean, default: false },
   dateOfLeaving: { type: Date, default: Date.now },
   reason: { type: String , default: "On Request" },
-  totalPaid: { type: Number, default: 0 },
 }, { timestamps: true });
 
 // ✅ Ensure uniqueness per student
