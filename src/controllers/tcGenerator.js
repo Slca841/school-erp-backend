@@ -1,11 +1,33 @@
 import TransferCertificate from "../models/tcGenerator.js";
 import Student from "../models/StudentModel.js";
+import Attendance from "../models/Attendance.js";
+import StudentFeePayment from "../models/StudentFeePayment.js";
+import LeaveApplication from "../models/LeaveApplication.js";
+import FeeReminder from "../models/FeeReminderModel.js";
+
+
+const deleteStudentRelatedDataAfterTC = async (studentId) => {
+  // 1️⃣ Attendance → sirf iss student ko pull karo
+  await Attendance.updateMany(
+    {},
+    { $pull: { students: { studentId } } }
+  );
+
+  // 2️⃣ Fee Payments
+  await StudentFeePayment.deleteMany({ studentId });
+
+  // 3️⃣ Leave Applications
+  await LeaveApplication.deleteMany({ studentId });
+
+  // 4️⃣ Fee Reminders
+  await FeeReminder.deleteMany({ studentId });
+};
+
 
 export const approveTC = async (req, res) => {
   try {
     const { id } = req.params; // studentId
 
-    // ✅ Student find karo
     const student = await Student.findById(id);
     if (!student) {
       return res.status(404).json({
@@ -14,7 +36,6 @@ export const approveTC = async (req, res) => {
       });
     }
 
-    // ❌ Agar pehle se TC approved hai
     if (student.status === "TC_APPROVED") {
       return res.status(400).json({
         success: false,
@@ -37,16 +58,21 @@ export const approveTC = async (req, res) => {
       reason: "On Request",
     });
 
-    // 🔥 MOST IMPORTANT PART
+    // 🔥 DELETE ALL STUDENT LIVE DATA
+    await deleteStudentRelatedDataAfterTC(id);
+
+    // 🔥 UPDATE STATUS
     student.status = "TC_APPROVED";
     await student.save();
 
     res.status(200).json({
       success: true,
-      message: "TC Approved & Student moved to TC list",
+      message: "TC Approved & Student data cleaned",
       tc,
     });
+
   } catch (err) {
+    console.error("❌ TC approve error:", err);
     res.status(500).json({
       success: false,
       message: "Error approving TC",
@@ -54,6 +80,7 @@ export const approveTC = async (req, res) => {
     });
   }
 };
+
 
 // ✅ GET TC by studentId
 export const getStudentTC = async (req, res) => {
