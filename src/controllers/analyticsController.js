@@ -549,3 +549,118 @@ export const deleteStudentCompletely = async (req, res) => {
     res.status(500).json({ success: false });
   }
 };
+
+
+/* 🟢 ACTIVE STUDENTS */
+export const getActiveStudents = async (req, res) => {
+  try {
+    // 🔥 ONLY ACTIVE STUDENTS
+    const students = await Student.find({ status: "ACTIVE" });
+
+    const fees = await StudentFees.find();
+    const payments = await StudentFeePayment.find();
+
+    const data = await Promise.all(
+      students.map(async (s) => {
+        const fee = fees.find(
+          (f) => f.studentId.toString() === s._id.toString()
+        );
+
+        const classFee = await ClassFeeMaster.findOne({
+          className: s.studentclass,
+        });
+
+        const effective = getEffectiveFee(fee, classFee);
+
+        const paid = payments.filter(
+          (p) => p.studentId.toString() === s._id.toString()
+        );
+
+        const totalPaid = paid.reduce(
+          (sum, p) => sum + (p.paidAmount || 0),
+          0
+        );
+
+        return {
+          _id: s._id,
+          fullName: s.fullName,
+          studentclass: s.studentclass,
+          studentFatherName: s.studentFatherName,
+          contact1: s.contact1,
+
+          // 🔥 EXACT SAME FIELDS
+          yearlyFee: effective.yearlyFee,
+          previousYearFee: effective.previousYearFee,
+          otherFees: effective.otherFees,
+          discount: effective.discount,
+          totalFee: effective.totalFee,
+
+          totalPaid,
+          remainingFee: effective.totalFee - totalPaid,
+        };
+      })
+    );
+
+    res.json({ success: true, students: data });
+  } catch (err) {
+    console.error("❌ getActiveStudents error:", err);
+    res.status(500).json({ success: false });
+  }
+};
+
+
+/* 🔴 TC APPROVED STUDENTS */
+export const getTCStudents = async (req, res) => {
+  try {
+    const students = await Student.find({ status: "TC_APPROVED" });
+
+    const fees = await StudentFees.find();
+    const payments = await StudentFeePayment.find();
+
+    const data = await Promise.all(
+      students.map(async (s) => {
+        const fee = fees.find(
+          (f) => f.studentId.toString() === s._id.toString()
+        );
+
+        const classFee = await ClassFeeMaster.findOne({
+          className: s.studentclass,
+        });
+
+        const effective = getEffectiveFee(fee, classFee);
+
+        const paid = payments.filter(
+          (p) => p.studentId.toString() === s._id.toString()
+        );
+
+        const totalPaid = paid.reduce(
+          (sum, p) => sum + (p.paidAmount || 0),
+          0
+        );
+
+        return {
+          _id: s._id,
+          fullName: s.fullName,
+          studentclass: s.studentclass,
+          studentFatherName: s.studentFatherName,
+          contact1: s.contact1,
+
+          yearlyFee: effective.yearlyFee,
+          previousYearFee: effective.previousYearFee,
+          otherFees: effective.otherFees,
+          discount: effective.discount,
+          totalFee: effective.totalFee,
+
+          totalPaid,
+          remainingFee: effective.totalFee - totalPaid,
+        };
+      })
+    );
+
+    res.json({ success: true, students: data });
+  } catch (err) {
+    console.error("❌ getTCStudents error:", err);
+    res.status(500).json({ success: false });
+  }
+};
+

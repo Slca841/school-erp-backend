@@ -10,8 +10,9 @@ import {
   setOrUpdateClassFee,
   getAllClassFees,
   applyClassFeesToStudents,
-  deleteStudentCompletely 
-
+  deleteStudentCompletely,
+ getActiveStudents,
+  getTCStudents 
 } from "../controllers/analyticsController.js";
 
 import { approveTC, getStudentTC, getAllTCs, studentTcs } from "../controllers/tcGenerator.js";
@@ -40,6 +41,8 @@ analyticsRoutes.get("/tc/:id", getStudentTC);
 analyticsRoutes.get("/tc", getAllTCs);
 // ✅ Only single student's TC history
 analyticsRoutes.get("/singletc/:id", studentTcs);
+analyticsRoutes.get("/students/active", getActiveStudents);
+analyticsRoutes.get("/students/tc", getTCStudents);
 
 
 analyticsRoutes.post("/upgrade", upgradeOrDegradeClass);

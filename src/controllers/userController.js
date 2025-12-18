@@ -126,8 +126,6 @@ export const registerUser = async (req, res) => {
     penNo,
     apaarId,
     address,
-    discount,
-    yearlyFee,
     // Teacher fields
     dateOfJoining,
     salary,
@@ -136,6 +134,7 @@ export const registerUser = async (req, res) => {
     qualification,
     fatherName,
     motherName,
+
   } = req.body;
 
   try {
@@ -184,8 +183,7 @@ originalPassword: password,
         penNo,
         apaarId,
         address,
-        yearlyFee,
-        discount,
+   status: "ACTIVE",
       });
 
       return res.status(201).json({
@@ -382,6 +380,7 @@ dateOfAdmission: fixDate(r.dateofadmission) || new Date(),
 
             address: r.address || "",
              guardian: guardianData,
+               status: "ACTIVE",
           });
         }
 

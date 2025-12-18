@@ -1,26 +1,60 @@
 import TransferCertificate from "../models/tcGenerator.js";
+import Student from "../models/StudentModel.js";
 
 export const approveTC = async (req, res) => {
   try {
     const { id } = req.params; // studentId
 
-    // ✅ Find last TC of this student only
-    const lastTC = await TransferCertificate.findOne({ studentId: id }).sort({ tcNumber: -1 });
+    // ✅ Student find karo
+    const student = await Student.findById(id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    // ❌ Agar pehle se TC approved hai
+    if (student.status === "TC_APPROVED") {
+      return res.status(400).json({
+        success: false,
+        message: "TC already approved for this student",
+      });
+    }
+
+    // ✅ Last TC number (student-wise)
+    const lastTC = await TransferCertificate.findOne({ studentId: id })
+      .sort({ tcNumber: -1 });
+
     const newNumber = lastTC ? lastTC.tcNumber + 1 : 1;
 
+    // ✅ Create TC
     const tc = await TransferCertificate.create({
       studentId: id,
       tcNumber: newNumber,
       approved: true,
       dateOfLeaving: new Date(),
-      reason: "On Request"
+      reason: "On Request",
     });
 
-    res.status(200).json({ success: true, message: "TC Approved Successfully", tc });
+    // 🔥 MOST IMPORTANT PART
+    student.status = "TC_APPROVED";
+    await student.save();
+
+    res.status(200).json({
+      success: true,
+      message: "TC Approved & Student moved to TC list",
+      tc,
+    });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Error approving TC", error: err.message });
+    res.status(500).json({
+      success: false,
+      message: "Error approving TC",
+      error: err.message,
+    });
   }
 };
+
 // ✅ GET TC by studentId
 export const getStudentTC = async (req, res) => {
   try {

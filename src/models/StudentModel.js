@@ -47,6 +47,11 @@ const studentSchema = new mongoose.Schema(
     apaarId: { type: String },
 
     address: { type: String },
+status: {
+  type: String,
+  enum: ["ACTIVE", "TC_APPROVED"],
+  default: "ACTIVE",
+},
 
     // ✅ Guardian is fully optional & default null
     guardian: {
