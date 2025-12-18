@@ -4,6 +4,8 @@ import Attendance from "../models/Attendance.js";
 import StudentFeePayment from "../models/StudentFeePayment.js";
 import LeaveApplication from "../models/LeaveApplication.js";
 import FeeReminder from "../models/FeeReminderModel.js";
+import StudentFees from "../models/StudentFees.js";
+import ClassFeeMaster from "../models/ClassFeeMaster.js";
 
 
 const deleteStudentRelatedDataAfterTC = async (studentId) => {
@@ -23,63 +25,71 @@ const deleteStudentRelatedDataAfterTC = async (studentId) => {
   await FeeReminder.deleteMany({ studentId });
 };
 
+const calculateFeeSnapshot = async (student) => {
+  const payments = await StudentFeePayment.find({ studentId: student._id });
+
+  const totalPaid = payments.reduce(
+    (sum, p) => sum + (p.paidAmount || 0),
+    0
+  );
+
+  return { totalPaid };
+};
 
 export const approveTC = async (req, res) => {
   try {
-    const { id } = req.params; // studentId
+    const { id } = req.params;
 
     const student = await Student.findById(id);
     if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: "Student not found",
-      });
+      return res.status(404).json({ success: false, message: "Student not found" });
     }
 
     if (student.status === "TC_APPROVED") {
       return res.status(400).json({
         success: false,
-        message: "TC already approved for this student",
+        message: "TC already approved",
       });
     }
 
-    // ✅ Last TC number (student-wise)
+    // 🔥 STEP 1: TAKE SNAPSHOT BEFORE DELETE
+    const snapshot = await calculateFeeSnapshot(student);
+
+    // 🔢 TC number
     const lastTC = await TransferCertificate.findOne({ studentId: id })
       .sort({ tcNumber: -1 });
-
     const newNumber = lastTC ? lastTC.tcNumber + 1 : 1;
 
-    // ✅ Create TC
+    // 🔥 STEP 2: CREATE TC WITH SNAPSHOT
     const tc = await TransferCertificate.create({
       studentId: id,
       tcNumber: newNumber,
       approved: true,
       dateOfLeaving: new Date(),
       reason: "On Request",
+      totalPaid: snapshot.totalPaid,
+
     });
 
-    // 🔥 DELETE ALL STUDENT LIVE DATA
+    // 🔥 STEP 3: DELETE LIVE DATA
     await deleteStudentRelatedDataAfterTC(id);
 
-    // 🔥 UPDATE STATUS
+    // 🔥 STEP 4: UPDATE STUDENT STATUS
     student.status = "TC_APPROVED";
     await student.save();
 
-    res.status(200).json({
+    res.json({
       success: true,
-      message: "TC Approved & Student data cleaned",
+      message: "TC approved, payment snapshot saved",
       tc,
     });
 
   } catch (err) {
-    console.error("❌ TC approve error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Error approving TC",
-      error: err.message,
-    });
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 
 // ✅ GET TC by studentId
