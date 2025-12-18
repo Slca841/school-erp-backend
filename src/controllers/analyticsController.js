@@ -389,6 +389,7 @@ export const getAllStudentWithFeeDetails = async (_, res) => {
           _id: s._id,
           fullName: s.fullName,
           studentclass: s.studentclass,
+          studentFatherName: s.studentFatherName,
    contact1: s.contact1,
           // 🔥 SEND ALL CALCULATED FIELDS
           yearlyFee: effective.yearlyFee,
