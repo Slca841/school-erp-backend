@@ -111,12 +111,11 @@ export const getClassTeacher = async (req, res) => {
 // ✅ Get teacher of a class (by className) – for students/attendance
 export const getClassName = async (req, res) => {
   try {
-    const { className } = req.params;
+    const className = decodeURIComponent(req.params.className).trim();
 
-    const classData = await Class.findOne({ name: className }).populate(
-      "teacherId",
-      "fullName email"
-    );
+    const classData = await Class.findOne({
+      name: { $regex: new RegExp(`^${className}$`, "i") },
+    }).populate("teacherId", "fullName email");
 
     if (!classData || !classData.teacherId) {
       return res
@@ -129,6 +128,7 @@ export const getClassName = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 
 export const getClass = async (req, res) => {
