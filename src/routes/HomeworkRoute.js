@@ -4,7 +4,9 @@ import {
   getHomeworkByClass,
   getHomeworkByTeacher,
   deleteHomework,
-  deleteAllHomework
+  deleteAllHomework,
+  getUnreadHomeworkCount,
+  markHomeworkRead
 } from "../controllers/homeworkController.js";
 
 
@@ -23,6 +25,8 @@ homeworkRouter.get("/teacher/homework/:teacherId", getHomeworkByTeacher);
 // ✅ Delete homework
 homeworkRouter.delete("/delete/:id", deleteHomework);
 homeworkRouter.delete("/delete-all/:teacherId", deleteAllHomework);
+homeworkRouter.get("/unread/:studentId", getUnreadHomeworkCount);
+homeworkRouter.post("/mark-read", markHomeworkRead);
 
 
 export default homeworkRouter;

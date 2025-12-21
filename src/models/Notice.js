@@ -9,12 +9,16 @@ imagePublicId: String,
     targetType: String,
     targetClass: String,
 
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    default: null,
-
-    },
+createdByRole: {
+  type: String,
+  enum: ["admin", "teacher", "system"],
+  default: "system",
+},
+createdById: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  required: true,
+},
 
     // ✅ FIXED HERE
     readBy: {

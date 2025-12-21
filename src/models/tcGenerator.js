@@ -12,6 +12,6 @@ const transferCertificateSchema = new mongoose.Schema({
 transferCertificateSchema.index({ studentId: 1, tcNumber: 1 }, { unique: true });
 
 
-export default mongoose.model("TransferCertificate", transferCertificateSchema);
-
+const TransferCertificate = mongoose.model("TransferCertificate", transferCertificateSchema);
+export default TransferCertificate;
   

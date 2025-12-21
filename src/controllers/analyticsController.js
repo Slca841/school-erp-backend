@@ -19,24 +19,24 @@ import TeacherComplaint from "../models/TeacherComplaint.js";
 import LeaveApplication from "../models/LeaveApplication.js";
 import Notice from "../models/Notice.js";
 import FeeReminder from "../models/FeeReminderModel.js";
+import TransferCertificate from "../models/tcGenerator.js";
 
-const deleteOldStudentData = async (studentId, oldClass) => {
-  try {
+const deleteOldStudentData = async (studentId, oldClass, session = null) => {
+  const options = session ? { session } : {};
+
   await Attendance.updateMany(
     {},
     { $pull: { students: { studentId } } },
-    { session }
+    options
   );
 
-  await Homework.deleteMany({ classId: oldClass }, { session });
-  await TeacherComplaint.deleteMany({ studentId }, { session });
-  await LeaveApplication.deleteMany({ studentId }, { session });
-  await Notice.deleteMany({ targetClass: oldClass }, { session });
-  await FeeReminder.deleteMany({ studentId }, { session });
-  } catch (err) {
-    console.error("❌ Error deleting old student data:", err);
-  }
+  await Homework.deleteMany({ classId: oldClass }, options);
+  await TeacherComplaint.deleteMany({ studentId }, options);
+  await LeaveApplication.deleteMany({ studentId }, options);
+  await Notice.deleteMany({ targetClass: oldClass }, options);
+  await FeeReminder.deleteMany({ studentId }, options);
 };
+
 
 /* -------------------------------------------------------------------------- */
 /* 🧮 FEE CALCULATION (SINGLE SOURCE OF TRUTH) */
@@ -142,7 +142,11 @@ export const getAllClassFees = async (_, res) => {
 export const applyClassFeesToStudents = async (req, res) => {
   const { className } = req.body;
 
-  const students = await Student.find({ studentclass: className });
+  const students = await Student.find({
+  studentclass: className,
+  status: "ACTIVE",
+});
+
 
   for (const s of students) {
     const exists = await StudentFees.findOne({ studentId: s._id });
@@ -225,8 +229,13 @@ export const upgradeOrDegradeClass = async (req, res) => {
     let updated = 0;
 
     for (const item of selectedStudents) {
-      const student = await Student.findById(item.id).session(session);
-      if (!student) throw new Error("Student not found");
+    const student = await Student.findOne({
+  _id: item.id,
+  status: "ACTIVE",
+}).session(session);
+
+if (!student) throw new Error("Student not found or not active");
+
 
       const oldClass = student.studentclass;
       const index = classList.indexOf(oldClass);
@@ -321,36 +330,55 @@ export const upgradeOrDegradeClass = async (req, res) => {
 /* -------------------------------------------------------------------------- */
 /* 6️⃣ FEE SUMMARY */
 /* -------------------------------------------------------------------------- */
+
 export const getFeeSummary = async (_, res) => {
   try {
     const students = await Student.find();
     const fees = await StudentFees.find();
     const payments = await StudentFeePayment.find();
 
-    const maleCount = await Student.countDocuments({ gender: "Male" });
-    const femaleCount = await Student.countDocuments({ gender: "Female" });
+    /* ===============================
+       ✅ TC STUDENTS निकालो
+    =============================== */
+    const tcStudents = await TransferCertificate.find().select("studentId");
+    const tcStudentIds = tcStudents.map(tc => tc.studentId.toString());
 
+    /* ===============================
+       ✅ ACTIVE STUDENTS COUNT
+    =============================== */
+    const activeStudents = students.filter(
+      s => !tcStudentIds.includes(s._id.toString())
+    );
+
+    const maleCount = activeStudents.filter(s => s.gender === "Male").length;
+    const femaleCount = activeStudents.filter(s => s.gender === "Female").length;
+
+    /* ===============================
+       ❌ FEE LOGIC SAME (UNCHANGED)
+    =============================== */
     let totalFee = 0;
+for (const s of activeStudents) {
+  const fee = fees.find(f => f.studentId.toString() === s._id.toString());
+  const classFee = await ClassFeeMaster.findOne({ className: s.studentclass });
+  const effective = getEffectiveFee(fee, classFee);
+  totalFee += effective.totalFee;
+}
 
-    for (const s of students) {
-      const fee = fees.find(f => f.studentId.toString() === s._id.toString());
-      const classFee = await ClassFeeMaster.findOne({ className: s.studentclass });
-      const effective = getEffectiveFee(fee, classFee);
-      totalFee += effective.totalFee;
-    }
 
     const totalPaid = payments.reduce((s, p) => s + (p.paidAmount || 0), 0);
 
     res.json({
       success: true,
-      totalStudents: students.length,
+      totalStudents: activeStudents.length, // ✅ FIXED
       totalFee,
       totalPaid,
       totalRemaining: totalFee - totalPaid,
       maleCount,
       femaleCount,
     });
-  } catch {
+
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false });
   }
 };
@@ -421,7 +449,7 @@ export const getSingleStudentWithFeeDetails = async (req, res) => {
 
     const student = await Student.findById(id).populate(
       "userId",
-      "name email originalPassword"
+      "name email originalPassword role isActive"
     );
     if (!student)
       return res.json({ success: false, message: "Student not found" });
@@ -482,7 +510,8 @@ export const getTodaysBirthdays = async (_, res) => {
     const d = today.getDate();
     const m = today.getMonth();
 
-    const students = await Student.find();
+   const students = await Student.find({ status: "ACTIVE" });
+
     const teachers = await Teacher.find();
 
     res.json({
@@ -534,21 +563,47 @@ export const updateStudent = async (req, res) => {
 export const deleteStudentCompletely = async (req, res) => {
   try {
     const { id } = req.params;
-    const student = await Student.findById(id);
 
+    // 🔍 Find student first
+    const student = await Student.findById(id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    const userId = student.userId; // 👈 save before delete
+
+    // 🧹 Delete related collections
     await StudentFees.deleteMany({ studentId: id });
     await StudentFeePayment.deleteMany({ studentId: id });
     await FeeHistory.deleteMany({ studentId: id });
+
+    // 🗂️ Archive / old data cleanup
     await deleteOldStudentData(id, student.studentclass);
 
+    // ❌ Delete student
     await Student.findByIdAndDelete(id);
-    await User.findByIdAndDelete(student.userId);
 
-    res.json({ success: true, message: "Student deleted completely" });
-  } catch {
-    res.status(500).json({ success: false });
+    // ❌ Delete linked user account
+    if (userId) {
+      await User.findByIdAndDelete(userId);
+    }
+
+    res.json({
+      success: true,
+      message: "Student and user deleted completely",
+    });
+  } catch (error) {
+    console.error("Delete student error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete student completely",
+    });
   }
 };
+
 
 
 /* 🟢 ACTIVE STUDENTS */

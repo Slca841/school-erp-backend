@@ -4,6 +4,7 @@ import Attendance from "../models/Attendance.js";
 import StudentFeePayment from "../models/StudentFeePayment.js";
 import LeaveApplication from "../models/LeaveApplication.js";
 import FeeReminder from "../models/FeeReminderModel.js";
+import User from "../models/userModel.js";
 
 
 const deleteStudentRelatedDataAfterTC = async (studentId) => {
@@ -64,6 +65,12 @@ export const approveTC = async (req, res) => {
     // 🔥 UPDATE STATUS
     student.status = "TC_APPROVED";
     await student.save();
+// 🔒 DISABLE LOGIN
+const user = await User.findById(student.userId);
+if (user) {
+  user.isActive = false;
+  await user.save();
+}
 
     res.status(200).json({
       success: true,

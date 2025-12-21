@@ -128,7 +128,10 @@ io.on("connection", (socket) => {
     console.log("💸 Fee reminder emitted:", data);
     io.to(`class_${data.className}`).emit("fee_reminder", data);
   });
-  
+  socket.on("homework_read", ({ studentId }) => {
+  io.to(`student_${studentId}`).emit("homework_read");
+});
+
   // ----------------------
   // USER DISCONNECT
   // ----------------------
@@ -149,12 +152,20 @@ app.use("/api/teachers", teacherRoutes);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/complaint", complaintsRouter);
 app.use("/api/notice", noticeRoutes);
-app.use("/api/homework", homeworkRouter);
 app.use("/api/notification", notificationRouter);
 app.use("/api/subject", subjectAssginRouter);
 app.use("/api/event", eventRouter);
 app.use("/api/school", schoolRouter);
 app.use("/api/secure", secureRouter);
+app.use(
+  "/api/homework",
+  (req, res, next) => {
+    req.io = io;
+    next();
+  },
+  homeworkRouter
+);
+
 // Fee router
 app.use(
   "/api/fee",

@@ -32,6 +32,13 @@ export const loginUser = async (req, res) => {
     if (!isMatch)
       return res.json({ success: false, message: "Invalid password" });
 
+if (!user.isActive) {
+  return res.status(403).json({
+    success: false,
+    message: "Your account is deactivated (TC Approved)",
+  });
+}
+
     const token = createToken(user._id, user.role);
 
     // ✅ Student login
@@ -66,6 +73,7 @@ export const loginUser = async (req, res) => {
         email: user.email,
         className: classData?.name || null,
         classId: classData?._id || null,
+          user: { _id: user._id },
         message: "Teacher login successful",
       });
     }
@@ -76,8 +84,10 @@ export const loginUser = async (req, res) => {
         success: true,
         token,
         role,
+        adminId: user._id,
         name: user.name,
         email: user.email,
+         user: { _id: user._id },
         message: "Admin login successful",
       });
     }
@@ -160,6 +170,7 @@ const hashedPassword = await bcrypt.hash(String(password || "1234"), 10);
       password: hashedPassword,
 originalPassword: password,
       role,
+       isActive: true,
     });
 
     // ✅ Student registration
@@ -347,6 +358,7 @@ export const bulkRegister = async (req, res) => {
           password: hashedPassword,
           originalPassword: plainPassword,
           role: r.role ? r.role.toLowerCase() : "student",
+           isActive: true,
         });
 
         // GUARDIAN ALWAYS IGNORED
