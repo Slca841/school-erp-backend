@@ -171,6 +171,7 @@ const hashedPassword = await bcrypt.hash(String(password || "1234"), 10);
 originalPassword: password,
       role,
        isActive: true,
+         isTestUser: false,
     });
 
     // ✅ Student registration
@@ -359,6 +360,7 @@ export const bulkRegister = async (req, res) => {
           originalPassword: plainPassword,
           role: r.role ? r.role.toLowerCase() : "student",
            isActive: true,
+             isTestUser: false,
         });
 
         // GUARDIAN ALWAYS IGNORED

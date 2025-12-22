@@ -142,18 +142,24 @@ export const getAllClassFees = async (_, res) => {
 export const applyClassFeesToStudents = async (req, res) => {
   const { className } = req.body;
 
-  const students = await Student.find({
+const students = await Student.find({
   studentclass: className,
   status: "ACTIVE",
-});
+}).populate("userId");
+
+const realStudents = students.filter(
+  s => s.userId && !s.userId.isTestUser
+);
 
 
-  for (const s of students) {
-    const exists = await StudentFees.findOne({ studentId: s._id });
-    if (!exists) {
-      await StudentFees.create({ studentId: s._id });
-    }
+
+for (const s of realStudents) {
+  const exists = await StudentFees.findOne({ studentId: s._id });
+  if (!exists) {
+    await StudentFees.create({ studentId: s._id });
   }
+}
+
 
   res.json({ success: true, message: "Student fee records ensured" });
 };
@@ -229,13 +235,16 @@ export const upgradeOrDegradeClass = async (req, res) => {
     let updated = 0;
 
     for (const item of selectedStudents) {
-    const student = await Student.findOne({
+ const student = await Student.findOne({
   _id: item.id,
   status: "ACTIVE",
-}).session(session);
+})
+.populate("userId")
+.session(session);
 
-if (!student) throw new Error("Student not found or not active");
-
+if (!student || student.userId?.isTestUser) {
+  throw new Error("Test student cannot be upgraded");
+}
 
       const oldClass = student.studentclass;
       const index = classList.indexOf(oldClass);
@@ -333,7 +342,7 @@ if (!student) throw new Error("Student not found or not active");
 
 export const getFeeSummary = async (_, res) => {
   try {
-    const students = await Student.find();
+  const students = await Student.find().populate("userId");
     const fees = await StudentFees.find();
     const payments = await StudentFeePayment.find();
 
@@ -346,9 +355,13 @@ export const getFeeSummary = async (_, res) => {
     /* ===============================
        ✅ ACTIVE STUDENTS COUNT
     =============================== */
-    const activeStudents = students.filter(
-      s => !tcStudentIds.includes(s._id.toString())
-    );
+
+const activeStudents = students.filter(
+  s =>
+    s.status === "ACTIVE" &&
+    s.userId &&
+    !s.userId.isTestUser
+);
 
     const maleCount = activeStudents.filter(s => s.gender === "Male").length;
     const femaleCount = activeStudents.filter(s => s.gender === "Female").length;
@@ -388,12 +401,17 @@ for (const s of activeStudents) {
 /* -------------------------------------------------------------------------- */
 export const getAllStudentWithFeeDetails = async (_, res) => {
   try {
-    const students = await Student.find();
+    const students = await Student.find().populate("userId");
+
+const realStudents = students.filter(
+  s => s.userId && !s.userId.isTestUser
+);
+
     const fees = await StudentFees.find();
     const payments = await StudentFeePayment.find();
 
     const data = await Promise.all(
-      students.map(async (s) => {
+      realStudents.map(async (s) => {
         const fee = fees.find(
           (f) => f.studentId.toString() === s._id.toString()
         );
@@ -510,14 +528,20 @@ export const getTodaysBirthdays = async (_, res) => {
     const d = today.getDate();
     const m = today.getMonth();
 
-   const students = await Student.find({ status: "ACTIVE" });
+const students = await Student.find({ status: "ACTIVE" }).populate("userId");
+
+const realStudents = students.filter(
+  s => s.userId && !s.userId.isTestUser
+);
+
 
     const teachers = await Teacher.find();
 
     res.json({
       success: true,
-      students: students.filter(s => new Date(s.dateOfBirth).getDate() === d && new Date(s.dateOfBirth).getMonth() === m),
-      teachers: teachers.filter(t => new Date(t.dateOfBirth).getDate() === d && new Date(t.dateOfBirth).getMonth() === m),
+      
+       students: realStudents.filter(s => new Date(s.dateOfBirth).getDate() === d && new Date(s.dateOfBirth).getMonth() === m),
+       teachers: teachers.filter(t => new Date(t.dateOfBirth).getDate() === d && new Date(t.dateOfBirth).getMonth() === m),
     });
   } catch {
     res.status(500).json({ success: false });
@@ -610,13 +634,21 @@ export const deleteStudentCompletely = async (req, res) => {
 export const getActiveStudents = async (req, res) => {
   try {
     // 🔥 ONLY ACTIVE STUDENTS
-    const students = await Student.find({ status: "ACTIVE" });
+   const students = await Student.find().populate("userId");
+
+const activeStudents = students.filter(
+  s =>
+    s.status === "ACTIVE" &&
+    s.userId &&
+    !s.userId.isTestUser
+);
+
 
     const fees = await StudentFees.find();
     const payments = await StudentFeePayment.find();
 
     const data = await Promise.all(
-      students.map(async (s) => {
+      activeStudents.map(async (s) => {
         const fee = fees.find(
           (f) => f.studentId.toString() === s._id.toString()
         );
@@ -667,13 +699,18 @@ export const getActiveStudents = async (req, res) => {
 /* 🔴 TC APPROVED STUDENTS */
 export const getTCStudents = async (req, res) => {
   try {
-    const students = await Student.find({ status: "TC_APPROVED" });
+const students = await Student.find({ status: "TC_APPROVED" }).populate("userId");
+
+const realStudents = students.filter(
+  s => s.userId && !s.userId.isTestUser
+);
+
 
     const fees = await StudentFees.find();
     const payments = await StudentFeePayment.find();
 
     const data = await Promise.all(
-      students.map(async (s) => {
+      realStudents.map(async (s) => {
         const fee = fees.find(
           (f) => f.studentId.toString() === s._id.toString()
         );

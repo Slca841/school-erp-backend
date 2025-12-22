@@ -29,8 +29,8 @@ export const approveTC = async (req, res) => {
   try {
     const { id } = req.params; // studentId
 
-    const student = await Student.findById(id);
-    if (!student) {
+   const student = await Student.findById(id).populate("userId");
+    if (!student || student?.userId?.isTestUser) {
       return res.status(404).json({
         success: false,
         message: "Student not found",
@@ -106,11 +106,16 @@ export const getStudentTC = async (req, res) => {
 };
 export const getAllTCs = async (req, res) => {
   try {
-    const tcs = await TransferCertificate.find()
-      .populate("studentId", "fullName studentclass rollNo")
-      .sort({ createdAt: -1 }); // latest first
-
-    res.status(200).json({ success: true, tcs });
+  const tcs = await TransferCertificate.find()
+  .populate({
+    path: "studentId",
+    select: "fullName studentclass rollNo userId",
+    populate: { path: "userId", select: "isTestUser" }
+  }).sort({ createdAt: -1 }); // latest first
+const realTCs = tcs.filter(
+  tc => !tc.studentId?.userId?.isTestUser
+);
+    res.status(200).json({ success: true, realTCs });
   } catch (err) {
     res.status(500).json({ success: false, message: "Error fetching TCs", error: err.message });
   }
