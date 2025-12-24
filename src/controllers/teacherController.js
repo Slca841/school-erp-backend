@@ -123,3 +123,23 @@ export const deleteTeacher = async (req, res) => {
   }
 };
 
+// ✅ Get all ACCOUNT users (for Account View modal)
+export const getAccountUsers = async (req, res) => {
+  try {
+    const accounts = await User.find({ role: "account" }).select(
+      "name email originalPassword isActive"
+    );
+
+    res.json({
+      success: true,
+      accounts,
+    });
+  } catch (err) {
+    console.error("❌ getAccountUsers error:", err.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch account users",
+    });
+  }
+};
+

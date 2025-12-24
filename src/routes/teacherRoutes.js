@@ -5,9 +5,11 @@ import {
   getTeacherById,
   updateTeacher,
   deleteTeacher,
+  getAccountUsers,
 } from "../controllers/teacherController.js";
 
 const teacherRoutes = express.Router();
+teacherRoutes.get("/accounts", getAccountUsers);
 
 teacherRoutes.get("/", getTeachers);
 teacherRoutes.get("/:id", getTeacherById);

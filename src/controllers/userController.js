@@ -32,12 +32,12 @@ export const loginUser = async (req, res) => {
     if (!isMatch)
       return res.json({ success: false, message: "Invalid password" });
 
-if (!user.isActive) {
-  return res.status(403).json({
-    success: false,
-    message: "Your account is deactivated (TC Approved)",
-  });
-}
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account is deactivated (TC Approved)",
+      });
+    }
 
     const token = createToken(user._id, user.role);
 
@@ -73,7 +73,7 @@ if (!user.isActive) {
         email: user.email,
         className: classData?.name || null,
         classId: classData?._id || null,
-          user: { _id: user._id },
+        user: { _id: user._id },
         message: "Teacher login successful",
       });
     }
@@ -87,7 +87,7 @@ if (!user.isActive) {
         adminId: user._id,
         name: user.name,
         email: user.email,
-         user: { _id: user._id },
+        user: { _id: user._id },
         message: "Admin login successful",
       });
     }
@@ -126,6 +126,7 @@ export const registerUser = async (req, res) => {
     email,
     role,
     gender,
+    religion,
     studentFatherName,
     studentMotherName,
     contact1,
@@ -160,7 +161,7 @@ export const registerUser = async (req, res) => {
       return res.json({ success: false, message: "Password too short" });
 
     // ✅ Hash password
-const hashedPassword = await bcrypt.hash(String(password || "1234"), 10);
+    const hashedPassword = await bcrypt.hash(String(password || "1234"), 10);
 
 
 
@@ -168,10 +169,10 @@ const hashedPassword = await bcrypt.hash(String(password || "1234"), 10);
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
-originalPassword: password,
+      originalPassword: password,
       role,
-       isActive: true,
-         isTestUser: false,
+      isActive: true,
+      isTestUser: false,
     });
 
     // ✅ Student registration
@@ -187,6 +188,7 @@ originalPassword: password,
         dateOfAdmission,
         category,
         gender,
+        religion,
         contact1,
         contact2,
         scholarNo,
@@ -195,7 +197,7 @@ originalPassword: password,
         penNo,
         apaarId,
         address,
-   status: "ACTIVE",
+        status: "ACTIVE",
       });
 
       return res.status(201).json({
@@ -359,8 +361,8 @@ export const bulkRegister = async (req, res) => {
           password: hashedPassword,
           originalPassword: plainPassword,
           role: r.role ? r.role.toLowerCase() : "student",
-           isActive: true,
-             isTestUser: false,
+          isActive: true,
+          isTestUser: false,
         });
 
         // GUARDIAN ALWAYS IGNORED
@@ -371,18 +373,18 @@ export const bulkRegister = async (req, res) => {
           await Student.create({
             userId: user._id,
 
-         fullName: r.fullname || "Unknown",
-studentclass: r.studentclass || "NA",
-rollNo: r.rollno || "0",
-dateOfBirth: fixDate(r.dateofbirth) || new Date(),
-dateOfAdmission: fixDate(r.dateofadmission) || new Date(),
+            fullName: r.fullname || "Unknown",
+            studentclass: r.studentclass || "NA",
+            rollNo: r.rollno || "0",
+            dateOfBirth: fixDate(r.dateofbirth) || new Date(),
+            dateOfAdmission: fixDate(r.dateofadmission) || new Date(),
 
-            
+
             studentFatherName: r.studentfathername || "",
             studentMotherName: r.studentmothername || "",
             category: r.category || "",
             gender: r.gender || "Male",
-
+            religion: r.religion || "",
             contact1: r.contact1 || "",
             contact2: r.contact2 || "",
 
@@ -393,8 +395,8 @@ dateOfAdmission: fixDate(r.dateofadmission) || new Date(),
             apaarId: r.apaarid || "",
 
             address: r.address || "",
-             guardian: guardianData,
-               status: "ACTIVE",
+            guardian: guardianData,
+            status: "ACTIVE",
           });
         }
 

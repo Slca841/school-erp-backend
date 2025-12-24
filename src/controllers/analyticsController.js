@@ -29,8 +29,6 @@ const deleteOldStudentData = async (studentId, oldClass, session = null) => {
     { $pull: { students: { studentId } } },
     options
   );
-
-  await Homework.deleteMany({ classId: oldClass }, options);
   await TeacherComplaint.deleteMany({ studentId }, options);
   await LeaveApplication.deleteMany({ studentId }, options);
   await Notice.deleteMany({ targetClass: oldClass }, options);
@@ -243,12 +241,19 @@ export const upgradeOrDegradeClass = async (req, res) => {
 .session(session);
 
 if (!student || student.userId?.isTestUser) {
-  throw new Error("Test student cannot be upgraded");
+ continue; 
 }
 
       const oldClass = student.studentclass;
       const index = classList.indexOf(oldClass);
       if (index === -1) throw new Error("Invalid class");
+
+  if (
+    (type === "upgrade" && index === classList.length - 1) ||
+    (type === "degrade" && index === 0) 
+  ) {
+    continue; 
+  }
 
       const nextClass =
         type === "upgrade" ? classList[index + 1] : classList[index - 1];
@@ -476,13 +481,23 @@ export const getSingleStudentWithFeeDetails = async (req, res) => {
     const classFee = await ClassFeeMaster.findOne({
       className: student.studentclass,
     });
-    const payments = await StudentFeePayment.find({ studentId: id });
-
     const effective = getEffectiveFee(fee, classFee);
-    const totalPaid = payments.reduce(
-      (sum, p) => sum + (p.paidAmount || 0),
-      0
-    );
+    
+  let totalPaid = 0;
+let payments = [];
+// 🔴 TC APPROVED → snapshot use karo
+if (student.status === "TC_APPROVED") {
+  const tc = await TransferCertificate.findOne({ studentId: id });
+  totalPaid = tc?.totalPaidAmount || 0;
+} else {
+  // 🟢 ACTIVE → live payments
+  const payments = await StudentFeePayment.find({ studentId: id });
+  totalPaid = payments.reduce(
+    (sum, p) => sum + (p.paidAmount || 0),
+    0
+  );
+}
+
 
 res.json({
   success: true,
@@ -551,35 +566,133 @@ const realStudents = students.filter(
 /* -------------------------------------------------------------------------- */
 /* 🔟 UPDATE STUDENT PROFILE */
 /* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* 🔟 UPDATE STUDENT PROFILE (STUDENT + GUARDIAN + USER) */
+/* -------------------------------------------------------------------------- */
 export const updateStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const data = { ...req.body };
 
+    /* ================= FIND STUDENT ================= */
     const student = await Student.findById(id);
-    const user = await User.findById(student.userId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
 
-    if (data.name) user.name = data.name;
-    if (data.email) user.email = data.email;
-    if (data.password?.trim()) {
-      user.password = await bcrypt.hash(data.password, 10);
-      user.originalPassword = data.password;
+    /* ================= FIND USER ================= */
+    const user = await User.findById(student.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Linked user not found",
+      });
+    }
+
+    /* ================= USER UPDATE ================= */
+    if (req.body.name) user.name = req.body.name;
+    if (req.body.email) user.email = req.body.email;
+
+    if (req.body.password && req.body.password.trim()) {
+      const hashed = await bcrypt.hash(req.body.password, 10);
+      user.password = hashed;
+      user.originalPassword = req.body.password;
     }
 
     await user.save();
 
-    delete data.password;
-    delete data.name;
-    delete data.email;
+    /* ================= SPLIT BODY ================= */
+    const {
+      guardianName,
+      guardianRelation,
+      guardianContact,
+      guardianEmail,
+      guardianAddress,
+      authorizedPersons,
+      ...studentFields
+    } = req.body;
 
-    const updatedStudent = await Student.findByIdAndUpdate(id, data, { new: true })
-      .populate("userId", "name email originalPassword");
+    /* ================= STUDENT FIELDS ================= */
+    const studentData = {
+      fullName: studentFields.fullName,
+      studentFatherName: studentFields.studentFatherName,
+      studentMotherName: studentFields.studentMotherName,
+      dateOfBirth: studentFields.dateOfBirth,
+      studentclass: studentFields.studentclass,
+      rollNo: studentFields.rollNo,
+      dateOfAdmission: studentFields.dateOfAdmission,
+      category: studentFields.category,
+      gender: studentFields.gender,
+      religion: studentFields.religion, // ✅ IMPORTANT
+      contact1: studentFields.contact1,
+      contact2: studentFields.contact2,
+      scholarNo: studentFields.scholarNo,
+      aadharNo: studentFields.aadharNo,
+      samagraId: studentFields.samagraId,
+      penNo: studentFields.penNo,
+      apaarId: studentFields.apaarId,
+      address: studentFields.address,
+      status: studentFields.status,
+    };
 
-    res.json({ success: true, student: updatedStudent });
-  } catch {
-    res.status(500).json({ success: false });
+    /* ================= CLEAN UNDEFINED ================= */
+    Object.keys(studentData).forEach(
+      (key) => studentData[key] === undefined && delete studentData[key]
+    );
+
+    /* ================= GUARDIAN BUILD ================= */
+    let guardian = null;
+
+    if (
+      guardianName ||
+      guardianRelation ||
+      guardianContact ||
+      guardianEmail ||
+      guardianAddress ||
+      (authorizedPersons && authorizedPersons.length)
+    ) {
+      guardian = {
+        name: guardianName || "",
+        relation: guardianRelation || "Guardian",
+        contactNumber: guardianContact || "",
+        email: guardianEmail || "",
+        address: guardianAddress || "",
+        authorizedPersons: authorizedPersons || [],
+      };
+    }
+
+    /* ================= FINAL UPDATE ================= */
+    const updatedStudent = await Student.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          ...studentData,
+          guardian, // ✅ guardian + authorizedPersons update
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    ).populate("userId", "name email originalPassword");
+
+    /* ================= RESPONSE ================= */
+    res.json({
+      success: true,
+      message: "Student updated successfully",
+      student: updatedStudent,
+    });
+  } catch (err) {
+    console.error("❌ updateStudent error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
+
 
 /* -------------------------------------------------------------------------- */
 /* 🗑️ DELETE STUDENT COMPLETELY */
@@ -707,7 +820,7 @@ const realStudents = students.filter(
 
 
     const fees = await StudentFees.find();
-    const payments = await StudentFeePayment.find();
+  
 
     const data = await Promise.all(
       realStudents.map(async (s) => {
@@ -721,14 +834,10 @@ const realStudents = students.filter(
 
         const effective = getEffectiveFee(fee, classFee);
 
-        const paid = payments.filter(
-          (p) => p.studentId.toString() === s._id.toString()
-        );
+const tc = await TransferCertificate.findOne({ studentId: s._id });
 
-        const totalPaid = paid.reduce(
-          (sum, p) => sum + (p.paidAmount || 0),
-          0
-        );
+const totalPaid = tc?.totalPaidAmount || 0;
+
 
         return {
           _id: s._id,

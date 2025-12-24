@@ -47,6 +47,13 @@ const studentSchema = new mongoose.Schema(
     apaarId: { type: String },
 
     address: { type: String },
+
+   religion: {
+  type: String,
+  trim: true,
+  default: "",
+},
+ 
 status: {
   type: String,
   enum: ["ACTIVE", "TC_APPROVED"],

@@ -5,7 +5,12 @@ const transferCertificateSchema = new mongoose.Schema({
   tcNumber: { type: Number, required: true },   // ✅ ab globally unique nahi
   approved: { type: Boolean, default: false },
   dateOfLeaving: { type: Date, default: Date.now },
-  reason: { type: String , default: "On Request" },
+  reason: { type: String},
+  totalPaidAmount: {
+  type: Number,
+  default: 0,
+},
+
 }, { timestamps: true });
 
 // ✅ Ensure uniqueness per student

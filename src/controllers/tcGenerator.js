@@ -9,10 +9,11 @@ import User from "../models/userModel.js";
 
 const deleteStudentRelatedDataAfterTC = async (studentId) => {
   // 1️⃣ Attendance → sirf iss student ko pull karo
-  await Attendance.updateMany(
-    {},
-    { $pull: { students: { studentId } } }
-  );
+await Attendance.updateMany(
+  { "students.studentId": studentId },
+  { $pull: { students: { studentId } } }
+);
+
 
   // 2️⃣ Fee Payments
   await StudentFeePayment.deleteMany({ studentId });
@@ -27,83 +28,88 @@ const deleteStudentRelatedDataAfterTC = async (studentId) => {
 
 export const approveTC = async (req, res) => {
   try {
-    const { id } = req.params; // studentId
+    const { id } = req.params;
+    const { dateOfLeaving, reasonOfTC } = req.body;
 
-   const student = await Student.findById(id).populate("userId");
-    if (!student || student?.userId?.isTestUser) {
-      return res.status(404).json({
-        success: false,
-        message: "Student not found",
-      });
-    }
-
-    if (student.status === "TC_APPROVED") {
+    if (!dateOfLeaving || !reasonOfTC) {
       return res.status(400).json({
         success: false,
-        message: "TC already approved for this student",
+        message: "Date of Leaving & Reason are required",
       });
     }
 
-    // ✅ Last TC number (student-wise)
-    const lastTC = await TransferCertificate.findOne({ studentId: id })
-      .sort({ tcNumber: -1 });
+    const student = await Student.findById(id).populate("userId");
+    if (!student || student.userId?.isTestUser) {
+      return res.status(404).json({ success: false });
+    }
 
-    const newNumber = lastTC ? lastTC.tcNumber + 1 : 1;
+    // 💰 PAYMENT SNAPSHOT
+    const payments = await StudentFeePayment.find({ studentId: id });
+    const totalPaidAmount = payments.reduce(
+      (sum, p) => sum + (p.paidAmount || 0),
+      0
+    );
+// 🔢 Generate next TC number for this student
+const lastTC = await TransferCertificate
+  .findOne({ studentId: id })
+  .sort({ tcNumber: -1 });
 
-    // ✅ Create TC
+const nextTCNumber = lastTC ? lastTC.tcNumber + 1 : 1;
+
+    // ✅ TC RECORD STORES DOL + REASON
     const tc = await TransferCertificate.create({
       studentId: id,
-      tcNumber: newNumber,
+   tcNumber: nextTCNumber,
       approved: true,
-      dateOfLeaving: new Date(),
-      reason: "On Request",
+      dateOfLeaving,
+      reason: reasonOfTC,
+      totalPaidAmount,
     });
 
-    // 🔥 DELETE ALL STUDENT LIVE DATA
     await deleteStudentRelatedDataAfterTC(id);
 
-    // 🔥 UPDATE STATUS
-    student.status = "TC_APPROVED";
-    await student.save();
-// 🔒 DISABLE LOGIN
-const user = await User.findById(student.userId);
-if (user) {
-  user.isActive = false;
-  await user.save();
-}
+    // 🔒 LOGIN DISABLE
+    const user = await User.findById(student.userId);
+    if (user) {
+      user.isActive = false;
+      await user.save();
+    }
 
-    res.status(200).json({
+    res.json({
       success: true,
-      message: "TC Approved & Student data cleaned",
+      message: "TC Approved Successfully",
       tc,
     });
-
   } catch (err) {
     console.error("❌ TC approve error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Error approving TC",
-      error: err.message,
-    });
+    res.status(500).json({ success: false });
   }
 };
+
+
 
 
 // ✅ GET TC by studentId
 export const getStudentTC = async (req, res) => {
   try {
-    const { id } = req.params; // studentId
-    const tc = await TransferCertificate.findOne({ studentId: id });
+    const { id } = req.params;
 
-    if (!tc) {
-      return res.status(404).json({ success: false, message: "No TC found" });
+    const tcs = await TransferCertificate
+      .find({ studentId: id })
+      .sort({ createdAt: -1 });
+
+    if (!tcs || tcs.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "No TC found" });
     }
 
-    res.status(200).json({ success: true, tc });
+    res.status(200).json({ success: true, tcs });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Error fetching TC", error: err.message });
+    res.status(500).json({ success: false });
   }
 };
+
 export const getAllTCs = async (req, res) => {
   try {
   const tcs = await TransferCertificate.find()
