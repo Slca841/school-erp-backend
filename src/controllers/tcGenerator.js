@@ -65,6 +65,10 @@ const nextTCNumber = lastTC ? lastTC.tcNumber + 1 : 1;
       reason: reasonOfTC,
       totalPaidAmount,
     });
+    
+// ✅ STUDENT STATUS UPDATE
+student.status = "TC_APPROVED";
+await student.save();
 
     await deleteStudentRelatedDataAfterTC(id);
 

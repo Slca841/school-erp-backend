@@ -573,25 +573,15 @@ export const updateStudent = async (req, res) => {
   try {
     const { id } = req.params;
 
-    /* ================= FIND STUDENT ================= */
     const student = await Student.findById(id);
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: "Student not found",
-      });
-    }
+    if (!student)
+      return res.status(404).json({ success: false, message: "Student not found" });
 
-    /* ================= FIND USER ================= */
     const user = await User.findById(student.userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "Linked user not found",
-      });
-    }
+    if (!user)
+      return res.status(404).json({ success: false, message: "Linked user not found" });
 
-    /* ================= USER UPDATE ================= */
+    /* ================= USER ================= */
     if (req.body.name) user.name = req.body.name;
     if (req.body.email) user.email = req.body.email;
 
@@ -600,98 +590,41 @@ export const updateStudent = async (req, res) => {
       user.password = hashed;
       user.originalPassword = req.body.password;
     }
-
     await user.save();
 
-    /* ================= SPLIT BODY ================= */
+    /* ================= STUDENT ================= */
     const {
-      guardianName,
-      guardianRelation,
-      guardianContact,
-      guardianEmail,
-      guardianAddress,
-      authorizedPersons,
+      guardian,
       ...studentFields
     } = req.body;
 
-    /* ================= STUDENT FIELDS ================= */
-    const studentData = {
-      fullName: studentFields.fullName,
-      studentFatherName: studentFields.studentFatherName,
-      studentMotherName: studentFields.studentMotherName,
-      dateOfBirth: studentFields.dateOfBirth,
-      studentclass: studentFields.studentclass,
-      rollNo: studentFields.rollNo,
-      dateOfAdmission: studentFields.dateOfAdmission,
-      category: studentFields.category,
-      gender: studentFields.gender,
-      religion: studentFields.religion, // ✅ IMPORTANT
-      contact1: studentFields.contact1,
-      contact2: studentFields.contact2,
-      scholarNo: studentFields.scholarNo,
-      aadharNo: studentFields.aadharNo,
-      samagraId: studentFields.samagraId,
-      penNo: studentFields.penNo,
-      apaarId: studentFields.apaarId,
-      address: studentFields.address,
-      status: studentFields.status,
-    };
-
-    /* ================= CLEAN UNDEFINED ================= */
-    Object.keys(studentData).forEach(
-      (key) => studentData[key] === undefined && delete studentData[key]
+    Object.keys(studentFields).forEach(
+      (k) => studentFields[k] === undefined && delete studentFields[k]
     );
 
-    /* ================= GUARDIAN BUILD ================= */
-    let guardian = null;
-
-    if (
-      guardianName ||
-      guardianRelation ||
-      guardianContact ||
-      guardianEmail ||
-      guardianAddress ||
-      (authorizedPersons && authorizedPersons.length)
-    ) {
-      guardian = {
-        name: guardianName || "",
-        relation: guardianRelation || "Guardian",
-        contactNumber: guardianContact || "",
-        email: guardianEmail || "",
-        address: guardianAddress || "",
-        authorizedPersons: authorizedPersons || [],
-      };
-    }
-
-    /* ================= FINAL UPDATE ================= */
     const updatedStudent = await Student.findByIdAndUpdate(
       id,
       {
         $set: {
-          ...studentData,
-          guardian, // ✅ guardian + authorizedPersons update
+          ...studentFields,
+          guardian: guardian || null, // ✅ FULL GUARDIAN UPDATE
         },
       },
-      {
-        new: true,
-        runValidators: true,
-      }
+      { new: true, runValidators: true }
     ).populate("userId", "name email originalPassword");
 
-    /* ================= RESPONSE ================= */
     res.json({
       success: true,
       message: "Student updated successfully",
       student: updatedStudent,
     });
+
   } catch (err) {
     console.error("❌ updateStudent error:", err);
-    res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 
 /* -------------------------------------------------------------------------- */
