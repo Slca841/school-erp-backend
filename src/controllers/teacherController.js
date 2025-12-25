@@ -11,7 +11,7 @@ import TeacherSubjectAssign from "../models/TeacherSubjectAssignModel.js";
 export const getTeachers = async (req, res) => {
   try {
     const teachers = await Teacher.find()
-      .populate("userId", "name email originalPassword");
+      .populate("userId", "name email originalPassword isTestUser");
 const realTeachers = teachers.filter(
   t => t.userId && !t.userId.isTestUser
 );
