@@ -12,9 +12,11 @@ export const getTeachers = async (req, res) => {
   try {
     const teachers = await Teacher.find()
       .populate("userId", "name email originalPassword");
-
+const realTeachers = teachers.filter(
+  t => t.userId && !t.userId.isTestUser
+);
     const teachersWithComplaints = await Promise.all(
-      teachers.map(async (t) => {
+      realTeachers.map(async (t) => {
         const count = await TeacherComplaint.countDocuments({ teacherId: t._id });
         return { ...t.toObject(), complaintCount: count };
       })
