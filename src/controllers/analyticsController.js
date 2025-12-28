@@ -491,7 +491,7 @@ if (student.status === "TC_APPROVED") {
   totalPaid = tc?.totalPaidAmount || 0;
 } else {
   // 🟢 ACTIVE → live payments
-  const payments = await StudentFeePayment.find({ studentId: id });
+   payments = await StudentFeePayment.find({ studentId: id });
   totalPaid = payments.reduce(
     (sum, p) => sum + (p.paidAmount || 0),
     0
