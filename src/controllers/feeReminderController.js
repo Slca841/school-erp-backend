@@ -37,7 +37,7 @@ export const sendFeeReminder = async (req, res) => {
       const totalPaid = payments.length ? payments[0].totalPaid : 0;
 
       if (totalPaid < targetFee) {
-        const message = `Dear ${student.fullName}, please submit your pending fees.`
+        const message = `Hii ${student.studentFatherName}, this is a friendly reminder from SANT LAXMAN CHAITANYA ACADEMY regarding ${student.fullName} Please settle pending fee to avoid late fees..`
 
         // ⭐ Save or Update reminder (ALWAYS only 1)
     const newReminder = await FeeReminder.findOneAndUpdate(
