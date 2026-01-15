@@ -157,8 +157,13 @@ export const registerUser = async (req, res) => {
     if (!validator.isEmail(email))
       return res.json({ success: false, message: "Enter a valid email" });
 
-    if (password.length < 8)
-      return res.json({ success: false, message: "Password too short" });
+   if (!password || password.length < 6) {
+  return res.json({
+    success: false,
+    message: "Password must be at least 6 characters",
+  });
+}
+
 
     // ✅ Hash password
     const hashedPassword = await bcrypt.hash(String(password || "1234"), 10);
@@ -278,12 +283,20 @@ export const adminResetPassword = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Missing email or password" });
 
+        if (newPassword.length < 6) {
+  return res.status(400).json({
+    success: false,
+    message: "Password must be at least 6 characters",
+  });
+}
+
     const user = await User.findOne({ email });
     if (!user)
       return res.status(404).json({ success: false, message: "User not found" });
 
     const hashed = await bcrypt.hash(newPassword, 10);
     user.password = hashed;
+    
     await user.save();
 
     res.json({ success: true, message: "Password reset successfully" });
@@ -306,6 +319,12 @@ export const updatePassword = async (req, res) => {
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch)
       return res.json({ success: false, message: "Old password incorrect" });
+
+if (newPassword.length < 6)
+  return res.json({
+    success: false,
+    message: "New password must be at least 6 characters",
+  });
 
     const hashed = await bcrypt.hash(newPassword, 10);
     user.password = hashed;
@@ -351,7 +370,11 @@ export const bulkRegister = async (req, res) => {
           continue;
         }
 
-        const plainPassword = r.password ? String(r.password) : "1234";
+        const plainPassword =
+  r.password && String(r.password).length >= 6
+    ? String(r.password)
+    : "123456";
+
         const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
         // CREATE USER
