@@ -150,12 +150,20 @@ export const registerUser = async (req, res) => {
 
   try {
     // ✅ User validation
-    const exists = await User.findOne({ $or: [{ email }, { name }] });
-    if (exists)
-      return res.json({ success: false, message: "User already exists" });
+const query = [{ name }];
+if (email) query.push({ email });
 
-    if (!validator.isEmail(email))
-      return res.json({ success: false, message: "Enter a valid email" });
+const exists = await User.findOne({ $or: query });
+if (exists) {
+  return res.json({ success: false, message: "User already exists" });
+}
+
+if (email && !validator.isEmail(email)) {
+  return res.json({
+    success: false,
+    message: "Enter a valid email",
+  });
+}
 
    if (!password || password.length < 6) {
   return res.json({
@@ -164,21 +172,24 @@ export const registerUser = async (req, res) => {
   });
 }
 
-
     // ✅ Hash password
     const hashedPassword = await bcrypt.hash(String(password || "1234"), 10);
 
+const userData = {
+  name,
+  password: hashedPassword,
+  originalPassword: password,
+  role,
+  isActive: true,
+  isTestUser: false,
+};
 
+if (email) {
+  userData.email = email.toLowerCase();
+}
 
-    const user = await User.create({
-      name,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      originalPassword: password,
-      role,
-      isActive: true,
-      isTestUser: false,
-    });
+const user = await User.create(userData);
+
 
     // ✅ Student registration
     if (role === "student") {
@@ -276,12 +287,14 @@ export const registerUser = async (req, res) => {
 /* -------------------------------------------------------------------------- */
 export const adminResetPassword = async (req, res) => {
   try {
-    const { email, newPassword } = req.body;
+ const { identifier, newPassword } = req.body;
 
-    if (!email || !newPassword)
-      return res
-        .status(400)
-        .json({ success: false, message: "Missing email or password" });
+if (!identifier || !newPassword) {
+  return res.status(400).json({
+    success: false,
+    message: "Missing username/email or password",
+  });
+}
 
         if (newPassword.length < 6) {
   return res.status(400).json({
@@ -290,9 +303,13 @@ export const adminResetPassword = async (req, res) => {
   });
 }
 
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(404).json({ success: false, message: "User not found" });
+const user = await User.findOne({
+  $or: [{ email: identifier }, { name: identifier }],
+});
+
+if (!user)
+  return res.status(404).json({ success: false, message: "User not found" });
+
 
     const hashed = await bcrypt.hash(newPassword, 10);
     user.password = hashed;
@@ -306,14 +323,17 @@ export const adminResetPassword = async (req, res) => {
   }
 };
 
+   
 /* -------------------------------------------------------------------------- */
 /* ✅ User Password Update */
 /* -------------------------------------------------------------------------- */
 export const updatePassword = async (req, res) => {
-  const { email, oldPassword, newPassword } = req.body;
+const { identifier, oldPassword, newPassword } = req.body;
 
   try {
-    const user = await User.findOne({ email });
+const user = await User.findOne({
+  $or: [{ email: identifier }, { name: identifier }],
+});
     if (!user) return res.json({ success: false, message: "User not found" });
 
     const isMatch = await bcrypt.compare(oldPassword, user.password);
@@ -342,7 +362,10 @@ export const bulkRegister = async (req, res) => {
     const { records } = req.body;
 
     if (!records || !Array.isArray(records) || records.length === 0) {
-      return res.status(400).json({ success: false, message: "No data found" });
+      return res.status(400).json({
+        success: false,
+        message: "No data found",
+      });
     }
 
     const createdUsers = [];
@@ -356,53 +379,62 @@ export const bulkRegister = async (req, res) => {
 
     for (const r of records) {
       try {
-        if (!r.name || !r.email) {
-          skipped.push({ record: r, reason: "Missing name/email" });
+        // ✅ name mandatory
+        if (!r.name) {
+          skipped.push({ record: r, reason: "Missing name" });
           continue;
         }
 
-        const email = String(r.email).trim().toLowerCase();
         const name = String(r.name).trim();
 
-        const exists = await User.findOne({ email });
-        if (exists) {
-          skipped.push({ record: r, reason: "Email already exists" });
-          continue;
-        }
-
+        // ✅ password
         const plainPassword =
-  r.password && String(r.password).length >= 6
-    ? String(r.password)
-    : "123456";
+          r.password && String(r.password).length >= 6
+            ? String(r.password)
+            : "123456";
 
         const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
-        // CREATE USER
-        const user = await User.create({
+        // ✅ user base data
+        const userData = {
           name,
-          email,
           password: hashedPassword,
           originalPassword: plainPassword,
           role: r.role ? r.role.toLowerCase() : "student",
           isActive: true,
           isTestUser: false,
-        });
+        };
 
-        // GUARDIAN ALWAYS IGNORED
-        const guardianData = null;
+        // ✅ optional email
+        if (r.email) {
+          const email = String(r.email).trim().toLowerCase();
 
-        // ONLY STUDENT (YOU CAN EXTEND FOR TEACHER LATER)
+          if (!validator.isEmail(email)) {
+            skipped.push({ record: r, reason: "Invalid email" });
+            continue;
+          }
+
+          const exists = await User.findOne({ email });
+          if (exists) {
+            skipped.push({ record: r, reason: "Email already exists" });
+            continue;
+          }
+
+          userData.email = email;
+        }
+
+        // ✅ create user
+        const user = await User.create(userData);
+
+        // ✅ create student only
         if (user.role === "student") {
           await Student.create({
             userId: user._id,
-
-            fullName: r.fullname || "Unknown",
+            fullName: r.fullname || name,
             studentclass: r.studentclass || "NA",
             rollNo: r.rollno || "0",
-            dateOfBirth: fixDate(r.dateofbirth) || new Date(),
-            dateOfAdmission: fixDate(r.dateofadmission) || new Date(),
-
-
+            dateOfBirth: fixDate(r.dateofbirth),
+            dateOfAdmission: fixDate(r.dateofadmission),
             studentFatherName: r.studentfathername || "",
             studentMotherName: r.studentmothername || "",
             category: r.category || "",
@@ -410,20 +442,18 @@ export const bulkRegister = async (req, res) => {
             religion: r.religion || "",
             contact1: r.contact1 || "",
             contact2: r.contact2 || "",
-
             scholarNo: r.scholarno || "",
             aadharNo: r.aadharno || "",
             samagraId: r.samagraid || "",
             penNo: r.penno || "",
             apaarId: r.apaarid || "",
-
             address: r.address || "",
-            guardian: guardianData,
+           guardian: null,
             status: "ACTIVE",
           });
         }
 
-        createdUsers.push(email);
+        createdUsers.push(userData.email || name);
 
       } catch (err) {
         skipped.push({
@@ -440,9 +470,13 @@ export const bulkRegister = async (req, res) => {
       skipped,
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
+
 
 
 
