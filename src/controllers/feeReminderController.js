@@ -67,6 +67,7 @@ export const sendFeeReminder = async (req, res) => {
           targetFee,
           createdAt: newReminder.createdAt,
           _id: newReminder._id,
+           read: false
         });
 
         reminders.push({
