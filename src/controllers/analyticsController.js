@@ -679,62 +679,95 @@ export const deleteStudentCompletely = async (req, res) => {
 /* 🟢 ACTIVE STUDENTS */
 export const getActiveStudents = async (req, res) => {
   try {
-    // 🔥 ONLY ACTIVE STUDENTS
-   const students = await Student.find().populate("userId");
+    const { class: classFilter, search, fee } = req.query;
 
-const activeStudents = students.filter(
-  s =>
-    s.status === "ACTIVE" &&
-    s.userId &&
-    !s.userId.isTestUser
-);
+let query = { status: "ACTIVE" };
 
+if (classFilter) {
+  query.studentclass = classFilter;
+}
 
-    const fees = await StudentFees.find();
-    const payments = await StudentFeePayment.find();
+if (search) {
+  query.fullName = { $regex: search, $options: "i" };
+}
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
 
-    const data = await Promise.all(
-      activeStudents.map(async (s) => {
-        const fee = fees.find(
-          (f) => f.studentId.toString() === s._id.toString()
-        );
+    // 🔥 STEP 1: Fetch students WITH userId
+const students = await Student.find(query)
+      .populate("userId", "isTestUser")
+      .select("fullName studentclass studentFatherName contact1 userId")
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
 
-        const classFee = await ClassFeeMaster.findOne({
-          className: s.studentclass,
-        });
-
-        const effective = getEffectiveFee(fee, classFee);
-
-        const paid = payments.filter(
-          (p) => p.studentId.toString() === s._id.toString()
-        );
-
-        const totalPaid = paid.reduce(
-          (sum, p) => sum + (p.paidAmount || 0),
-          0
-        );
-
-        return {
-          _id: s._id,
-          fullName: s.fullName,
-          studentclass: s.studentclass,
-          studentFatherName: s.studentFatherName,
-          contact1: s.contact1,
-
-          // 🔥 EXACT SAME FIELDS
-          yearlyFee: effective.yearlyFee,
-          previousYearFee: effective.previousYearFee,
-          otherFees: effective.otherFees,
-          discount: effective.discount,
-          totalFee: effective.totalFee,
-
-          totalPaid,
-          remainingFee: effective.totalFee - totalPaid,
-        };
-      })
+    // 🔥 STEP 2: Filter real students
+    const activeStudents = students.filter(
+      (s) => s.userId && !s.userId.isTestUser
     );
 
-    res.json({ success: true, students: data });
+    const studentIds = activeStudents.map((s) => s._id);
+
+    // 🔥 STEP 3: Fetch all related data (NO LOOP QUERY)
+    const [fees, payments, classFees] = await Promise.all([
+      StudentFees.find({ studentId: { $in: studentIds } }).lean(),
+      StudentFeePayment.find({ studentId: { $in: studentIds } }).lean(),
+      ClassFeeMaster.find().lean(), // ✅ ALL class fees
+    ]);
+
+    // 🔥 STEP 4: Build maps (FAST lookup)
+    const classFeeMap = {};
+    classFees.forEach((c) => {
+      classFeeMap[c.className] = c;
+    });
+
+    const paymentMap = {};
+    payments.forEach((p) => {
+      const id = p.studentId.toString();
+      if (!paymentMap[id]) paymentMap[id] = 0;
+      paymentMap[id] += p.paidAmount || 0;
+    });
+
+    const feeMap = {};
+    fees.forEach((f) => {
+      feeMap[f.studentId.toString()] = f;
+    });
+
+    // 🔥 STEP 5: Build final data (NO extra DB call)
+    const data = activeStudents.map((s) => {
+      const id = s._id.toString();
+
+      const fee = feeMap[id];
+      const classFee = classFeeMap[s.studentclass];
+
+      const effective = getEffectiveFee(fee, classFee);
+      const totalPaid = paymentMap[id] || 0;
+
+      return {
+        _id: s._id,
+        fullName: s.fullName,
+        studentclass: s.studentclass,
+        studentFatherName: s.studentFatherName,
+        contact1: s.contact1,
+
+        yearlyFee: effective.yearlyFee,
+        previousYearFee: effective.previousYearFee,
+        otherFees: effective.otherFees,
+        discount: effective.discount,
+        totalFee: effective.totalFee,
+
+        totalPaid,
+        remainingFee: effective.totalFee - totalPaid,
+      };
+    });
+
+    res.json({
+      success: true,
+      page,
+      count: data.length,
+      students: data,
+    });
+
   } catch (err) {
     console.error("❌ getActiveStudents error:", err);
     res.status(500).json({ success: false });
