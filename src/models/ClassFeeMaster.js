@@ -11,6 +11,7 @@ const classFeeMasterSchema = new mongoose.Schema({
   identityCardFee: { type: Number, default: 0 },
   panalty: { type: Number, default: 0 },
   otherCharges: { type: Number, default: 0 },
+  
 }, { timestamps: true });
 
  

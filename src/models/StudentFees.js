@@ -12,7 +12,8 @@ const studentFeesSchema = new mongoose.Schema({
   diaryFee: Number,
   identityCardFee: Number,
   panalty: Number,
-  otherCharges: Number
+  otherCharges: Number,
+   transportationFee: { type: Number, default: 0 },
 });
 
 export const StudentFees = mongoose.model("StudentFees", studentFeesSchema);

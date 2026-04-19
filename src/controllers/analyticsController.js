@@ -60,7 +60,10 @@ const getEffectiveFee = (studentFee, classFee) => {
   const identityCardFee = pick(studentFee.identityCardFee, classFee.identityCardFee);
   const panalty = pick(studentFee.panalty, classFee.panalty);
   const otherCharges = pick(studentFee.otherCharges, classFee.otherCharges);
-
+const transportationFee = pick(
+  studentFee.transportationFee,
+  classFee.transportationFee
+);
   const otherFees =
     examFee +
     admissionFee +
@@ -69,7 +72,8 @@ const getEffectiveFee = (studentFee, classFee) => {
     diaryFee +
     identityCardFee +
     panalty +
-    otherCharges;
+    otherCharges+
+     transportationFee;
 
   const discount = Number(studentFee.discount || 0);
 
@@ -91,6 +95,7 @@ const getEffectiveFee = (studentFee, classFee) => {
     identityCardFee,
     panalty,
     otherCharges,
+    transportationFee,
   };
 };
 
@@ -181,7 +186,7 @@ export const updateOtherFees = async (req, res) => {
       panalty: Number(req.body.panalty || 0),
       otherCharges: Number(req.body.otherCharges || 0),
       discount: Number(req.body.discount || 0),
-
+transportationFee: Number(req.body.transportationFee || 0),
     };
 
     let fees = await StudentFees.findOne({ studentId: id });
@@ -678,6 +683,7 @@ export const deleteStudentCompletely = async (req, res) => {
 
 /* 🟢 ACTIVE STUDENTS */
 export const getActiveStudents = async (req, res) => {
+
   try {
     const { class: classFilter, search, fee } = req.query;
 
@@ -690,6 +696,7 @@ if (classFilter) {
 if (search) {
   query.fullName = { $regex: search, $options: "i" };
 }
+  const total = await Student.countDocuments(query);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
 
@@ -764,6 +771,7 @@ const students = await Student.find(query)
     res.json({
       success: true,
       page,
+      total,
       count: data.length,
       students: data,
     });
