@@ -521,7 +521,7 @@ res.json({
     identityCardFee: effective.identityCardFee,
     panalty: effective.panalty,
     otherCharges: effective.otherCharges,
-
+transportationFee:effective.transportationFee,
     otherFees: effective.otherFees,
     discount: effective.discount,
     totalFee: effective.totalFee,
@@ -762,7 +762,7 @@ const students = await Student.find(query)
         otherFees: effective.otherFees,
         discount: effective.discount,
         totalFee: effective.totalFee,
-
+transportationFee:effective.transportationFee,
         totalPaid,
         remainingFee: effective.totalFee - totalPaid,
       };
