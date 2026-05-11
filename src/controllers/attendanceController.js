@@ -312,24 +312,34 @@ export const getStudentAttendance = async (req, res) => {
       "students.studentId": studentId,
     });
 
-    let present = 0;
-    let absent = 0;
+let present = 0;
+let absent = 0;
+let leave = 0;
 
-    records.forEach(rec => {
-      const student = rec.students.find(
-        s => s.studentId.toString() === studentId
-      );
-      if (student?.status === "Present") present++;
-      else absent++;
-    });
+records.forEach(rec => {
+  const student = rec.students.find(
+    s => s.studentId.toString() === studentId
+  );
 
-    res.json({
-      success: true,
-      present,
-      absent,
-      total: present + absent,
-      records,
-    });
+  if (student?.status === "Present") {
+    present++;
+  } 
+  else if (student?.status === "Absent") {
+    absent++;
+  } 
+  else if (student?.status === "Leave") {
+    leave++;
+  }
+});
+
+res.json({
+  success: true,
+  present,
+  absent,
+  leave,
+  total: present + absent + leave,
+  records,
+});
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

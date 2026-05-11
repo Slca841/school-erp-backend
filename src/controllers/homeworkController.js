@@ -8,7 +8,7 @@ import Student from "../models/StudentModel.js";
 export const createHomework = async (req, res) => {
   try {
     const { subject, description, classId, teacherId } = req.body;
-
+const image = req.file?.path || req.file?.secure_url || "";
     if (!subject || !description || !classId || !teacherId) {
       return res.status(400).json({ success: false, message: "All fields are required" });
     }
@@ -21,6 +21,7 @@ export const createHomework = async (req, res) => {
 const homework = await Homework.create({
   subject,
   description,
+  image,
   classId,
   teacherId,
 });

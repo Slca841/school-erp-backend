@@ -8,13 +8,17 @@ import {
   getUnreadHomeworkCount,
   markHomeworkRead
 } from "../controllers/homeworkController.js";
-
+import { homeworkUpload } from "../middleware/homeworkUpload.js";
 
 
 const homeworkRouter = express.Router();
 
 // ✅ Create new homework
-homeworkRouter.post("/create", createHomework);
+homeworkRouter.post(
+  "/create",
+  homeworkUpload.single("image"),
+  createHomework
+);
 
 // ✅ Get homework by class (Student)
 homeworkRouter.get("/class/:classId", getHomeworkByClass);

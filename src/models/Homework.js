@@ -4,6 +4,11 @@ const homeworkSchema = new mongoose.Schema(
   {
     subject: { type: String, required: true },
     description: { type: String, required: true },
+
+    image: {
+      type: String,
+      default: "",
+    },
     classId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Class",
