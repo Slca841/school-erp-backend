@@ -23,7 +23,7 @@ import schoolRouter from "./routes/schoolRoutes.js";
 import helmet from "helmet";
 import compression from "compression";
 import secureRouter from "./routes/authRoutes.js";
-
+import reportRouter from "./routes/studentRiskReportRoutes.js";
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); 
@@ -156,7 +156,8 @@ app.use("/api/notification", notificationRouter);
 app.use("/api/subject", subjectAssginRouter);
 app.use("/api/event", eventRouter);
 app.use("/api/school", schoolRouter);
-app.use("/api/secure", secureRouter);
+app.use("/api/school", schoolRouter);
+app.use("/api/report", reportRouter);
 app.use(
   "/api/homework",
   (req, res, next) => {

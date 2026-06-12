@@ -379,14 +379,27 @@ const activeStudents = students.filter(
     /* ===============================
        ❌ FEE LOGIC SAME (UNCHANGED)
     =============================== */
-    let totalFee = 0;
+const classFees = await ClassFeeMaster.find();
+
+const classFeeMap = {};
+
+classFees.forEach((c) => {
+  classFeeMap[c.className] = c;
+});
+
+let totalFee = 0;
+
 for (const s of activeStudents) {
-  const fee = fees.find(f => f.studentId.toString() === s._id.toString());
-  const classFee = await ClassFeeMaster.findOne({ className: s.studentclass });
+  const fee = fees.find(
+    (f) => f.studentId.toString() === s._id.toString()
+  );
+
+  const classFee = classFeeMap[s.studentclass];
+
   const effective = getEffectiveFee(fee, classFee);
+
   totalFee += effective.totalFee;
 }
-
 
     const totalPaid = payments.reduce((s, p) => s + (p.paidAmount || 0), 0);
 

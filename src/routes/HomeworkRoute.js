@@ -6,7 +6,12 @@ import {
   deleteHomework,
   deleteAllHomework,
   getUnreadHomeworkCount,
-  markHomeworkRead
+  markHomeworkRead,
+    saveHomeworkStatus,
+  getStudentHomeworkReport,
+  getHomeworkByDate,
+   getStudentsForHomework,
+   getHomeworkSummary
 } from "../controllers/homeworkController.js";
 import { homeworkUpload } from "../middleware/homeworkUpload.js";
 
@@ -31,6 +36,26 @@ homeworkRouter.delete("/delete/:id", deleteHomework);
 homeworkRouter.delete("/delete-all/:teacherId", deleteAllHomework);
 homeworkRouter.get("/unread/:studentId", getUnreadHomeworkCount);
 homeworkRouter.post("/mark-read", markHomeworkRead);
+homeworkRouter.get(
+  "/by-date",
+  getHomeworkByDate
+);
 
+homeworkRouter.post(
+  "/save-status",
+  saveHomeworkStatus
+);
 
+homeworkRouter.get(
+  "/student-report/:studentId",
+  getStudentHomeworkReport
+);
+homeworkRouter.get(
+  "/students/:classId",
+  getStudentsForHomework
+);
+homeworkRouter.get(
+  "/summary/:teacherId",
+  getHomeworkSummary
+);
 export default homeworkRouter;

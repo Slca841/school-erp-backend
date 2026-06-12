@@ -44,7 +44,12 @@ export const loginUser = async (req, res) => {
     // ✅ Student login
     if (role === "student") {
       const student = await Student.findOne({ userId: user._id });
-      const classData = await Class.findOne({ name: student.studentclass });
+   const classData = await Class.findOne({
+  name: {
+    $regex: `^${student.studentclass.trim()}$`,
+    $options: "i",
+  },
+});
 
       return res.json({
         success: true,

@@ -1,6 +1,6 @@
 import Class from "../models/classAssign.js";
 import Student from "../models/StudentModel.js";
-
+import TeacherSubjectAssign from "../models/TeacherSubjectAssignModel.js" 
 // ✅ Get students by teacher
 export const getTeacherStudents = async (req, res) => {
   try {
@@ -140,6 +140,26 @@ export const getClass = async (req, res) => {
   }
 };
 
+export const getTeacherSubjects = async (req, res) => {
+  try {
+    const { teacherId } = req.params;
 
+    const data = await TeacherSubjectAssign.find({
+      teacherId,
+    })
+      .populate("subjects", "name")
+      .populate("teacherId", "fullName");
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 
 

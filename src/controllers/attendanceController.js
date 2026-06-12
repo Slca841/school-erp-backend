@@ -120,39 +120,6 @@ export const getTodayAttendance = async (req, res) => {
 /* =========================================================
    3️⃣ GET CLASS ATTENDANCE (TEACHER)
 ========================================================= */
-// export const getClassAttendance = async (req, res) => {
-//   try {
-//     const { teacherId } = req.params;
-
-//     const classData = await Class.findOne({ teacherId });
-//     if (!classData) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "No class assigned",
-//       });
-//     }
-
-//     const today = new Date();
-//     today.setHours(0, 0, 0, 0);
-
-//     const record = await Attendance.findOne({
-//       classId: classData._id,
-//       date: today,
-//     }).populate({
-//   path: "students.studentId",
-//   select: "fullName rollNo status",
-//   match: { status: "ACTIVE" }  // ✅ Only active students
-// });
-
-//     res.json({
-//       success: true,
-//       class: classData.name,
-//       record,
-//     });
-//   } catch (err) {
-//     res.status(500).json({ success: false, message: err.message });
-//   }
-// };
 
 /* =========================================================
    4️⃣ TEACHER DASHBOARD SUMMARY (ACTIVE STUDENTS ONLY)
