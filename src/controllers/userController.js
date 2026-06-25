@@ -5,7 +5,8 @@ import Class from "../models/classAssign.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import validator from "validator";
-
+import StudentFees from "../models/StudentFees.js";
+import ClassFeeMaster from "../models/ClassFeeMaster.js";
 // ✅ Token generator
 const createToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: "1d" });
@@ -220,7 +221,14 @@ const user = await User.create(userData);
         address,
         status: "ACTIVE",
       });
+const classFee = await ClassFeeMaster.findOne({
+  className: student.studentclass,
+});
 
+await StudentFees.create({
+  studentId: student._id,
+  admissionFee: classFee?.admissionFee || 0,
+});
       return res.status(201).json({
         success: true,
         message: "Student registered successfully",
@@ -433,29 +441,39 @@ export const bulkRegister = async (req, res) => {
 
         // ✅ create student only
         if (user.role === "student") {
-          await Student.create({
-            userId: user._id,
-            fullName: r.fullname || name,
-            studentclass: r.studentclass || "NA",
-            rollNo: r.rollno || "0",
-            dateOfBirth: fixDate(r.dateofbirth),
-            dateOfAdmission: fixDate(r.dateofadmission),
-            studentFatherName: r.studentfathername || "",
-            studentMotherName: r.studentmothername || "",
-            category: r.category || "",
-            gender: r.gender || "Male",
-            religion: r.religion || "",
-            contact1: r.contact1 || "",
-            contact2: r.contact2 || "",
-            scholarNo: r.scholarno || "",
-            aadharNo: r.aadharno || "",
-            samagraId: r.samagraid || "",
-            penNo: r.penno || "",
-            apaarId: r.apaarid || "",
-            address: r.address || "",
-           guardian: null,
-            status: "ACTIVE",
-          });
+const student = await Student.create({
+  userId: user._id,
+  fullName: r.fullname || name,
+  studentclass: r.studentclass || "NA",
+  rollNo: r.rollno || "0",
+  dateOfBirth: fixDate(r.dateofbirth),
+  dateOfAdmission: fixDate(r.dateofadmission),
+  studentFatherName: r.studentfathername || "",
+  studentMotherName: r.studentmothername || "",
+  category: r.category || "",
+  gender: r.gender || "Male",
+  religion: r.religion || "",
+  contact1: r.contact1 || "",
+  contact2: r.contact2 || "",
+  scholarNo: r.scholarno || "",
+  aadharNo: r.aadharno || "",
+  samagraId: r.samagraid || "",
+  penNo: r.penno || "",
+  apaarId: r.apaarid || "",
+  address: r.address || "",
+  guardian: null,
+  status: "ACTIVE",
+});
+
+const classFee = await ClassFeeMaster.findOne({
+  className: student.studentclass,
+});
+
+await StudentFees.create({
+  studentId: student._id,
+  admissionFee: classFee?.admissionFee || 0,
+});
+          
         }
 
         createdUsers.push(userData.email || name);

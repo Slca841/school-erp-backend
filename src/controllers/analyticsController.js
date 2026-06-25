@@ -172,11 +172,13 @@ for (const s of realStudents) {
 /* 4️⃣ UPDATE STUDENT-SPECIFIC FEES */
 /* -------------------------------------------------------------------------- */
 export const updateOtherFees = async (req, res) => {
+   
   try {
     const { id } = req.params;
 
     // 🔒 ONLY ALLOWED FIELDS
     const payload = {
+        previousYearFee: Number(req.body.previousYearFee || 0),
       examFee: Number(req.body.examFee || 0),
       admissionFee: Number(req.body.admissionFee || 0),
       smartClassFee: Number(req.body.smartClassFee || 0),
@@ -203,7 +205,7 @@ transportationFee: Number(req.body.transportationFee || 0),
 
     res.json({
       success: true,
-      message: "Student fees updated (previous year fee locked)",
+     message: "Student fees updated successfully",
       fees,
     });
   } catch (err) {
@@ -294,14 +296,14 @@ if (!student || student.userId?.isTestUser) {
       const newClassFee = await ClassFeeMaster.findOne({ className: nextClass }).session(session);
 
       feeRecord.examFee = newClassFee?.examFee || 0;
-      feeRecord.admissionFee = newClassFee?.admissionFee || 0;
+      feeRecord.admissionFee = 0;
       feeRecord.smartClassFee = newClassFee?.smartClassFee || 0;
       feeRecord.annualFunctionFee = newClassFee?.annualFunctionFee || 0;
       feeRecord.diaryFee = newClassFee?.diaryFee || 0;
       feeRecord.identityCardFee = newClassFee?.identityCardFee || 0;
       feeRecord.panalty = newClassFee?.panalty || 0;
       feeRecord.otherCharges = newClassFee?.otherCharges || 0;
-
+feeRecord.discount = 0;
       await feeRecord.save({ session });
 
       student.previousClass = oldClass;
@@ -717,6 +719,7 @@ if (search) {
 const students = await Student.find(query)
       .populate("userId", "isTestUser")
       .select("fullName studentclass studentFatherName contact1 userId")
+       .sort({ fullName: 1 }) 
       .skip((page - 1) * limit)
       .limit(limit)
       .lean();
@@ -799,7 +802,7 @@ transportationFee:effective.transportationFee,
 /* 🔴 TC APPROVED STUDENTS */
 export const getTCStudents = async (req, res) => {
   try {
-const students = await Student.find({ status: "TC_APPROVED" }).populate("userId");
+const students = await Student.find({ status: "TC_APPROVED" }).sort({ fullName: 1 }).populate("userId");
 
 const realStudents = students.filter(
   s => s.userId && !s.userId.isTestUser

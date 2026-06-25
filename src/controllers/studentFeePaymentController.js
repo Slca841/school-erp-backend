@@ -4,7 +4,7 @@ import StudentFeePayment from "../models/StudentFeePayment.js";
 // 📌 Add new payment
 export const addPayment = async (req, res) => {
   try {
-    const { studentId, paidAmount, month, year } = req.body;
+  const { studentId, paidAmount, installment, year } = req.body;
 
     if (!studentId || !paidAmount) {
       return res.status(400).json({ success: false, message: "StudentId and paidAmount required" });
@@ -13,7 +13,7 @@ export const addPayment = async (req, res) => {
     const payment = new StudentFeePayment({
       studentId,
       paidAmount,
-      month,
+      installment,
       year,
     });
 
