@@ -39,10 +39,63 @@ export const approveTC = async (req, res) => {
     }
 
     const student = await Student.findById(id).populate("userId");
+    
     if (!student || student.userId?.isTestUser) {
       return res.status(404).json({ success: false });
     }
+    const existingTC = await TransferCertificate.findOne({
+  studentId: id,
+});
 
+if (existingTC) {
+  return res.status(400).json({
+    success: false,
+    message: "TC already generated",
+    tc: existingTC,
+  });
+}
+const attendanceRecords = await Attendance.find({
+  "students.studentId": id,
+});
+
+let overallPresent = 0;
+let overallAbsent = 0;
+let overallLeave = 0;
+
+attendanceRecords.forEach((record) => {
+  const attendance = record.students.find(
+    (s) => s.studentId.toString() === id.toString()
+  );
+
+  if (!attendance) return;
+
+  switch (attendance.status) {
+    case "Present":
+      overallPresent++;
+      break;
+
+    case "Absent":
+      overallAbsent++;
+      break;
+
+    case "Leave":
+      overallLeave++;
+      break;
+
+    default:
+      break;
+  }
+});
+
+const totalWorkingDays =
+  overallPresent + overallAbsent + overallLeave;
+
+const attendancePercentage =
+  totalWorkingDays > 0
+    ? Number(
+        ((overallPresent / totalWorkingDays) * 100).toFixed(2)
+      )
+    : 0;
     // 💰 PAYMENT SNAPSHOT
     const payments = await StudentFeePayment.find({ studentId: id });
     const totalPaidAmount = payments.reduce(
@@ -58,12 +111,17 @@ const nextTCNumber = lastTC ? lastTC.tcNumber + 1 : 1;
 
     // ✅ TC RECORD STORES DOL + REASON
     const tc = await TransferCertificate.create({
-      studentId: id,
-   tcNumber: nextTCNumber,
-      approved: true,
-      dateOfLeaving,
-      reason: reasonOfTC,
-      totalPaidAmount,
+     studentId: id,
+  tcNumber: nextTCNumber,
+  approved: true,
+  dateOfLeaving,
+  reason: reasonOfTC,
+  totalPaidAmount,
+  overallPresent,
+  overallAbsent,
+  overallLeave,
+  totalWorkingDays,
+  attendancePercentage,
     });
     
 // ✅ STUDENT STATUS UPDATE
