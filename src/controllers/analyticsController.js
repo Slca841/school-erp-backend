@@ -700,7 +700,7 @@ export const deleteStudentCompletely = async (req, res) => {
 export const getActiveStudents = async (req, res) => {
 
   try {
-    const { class: classFilter, search, fee } = req.query;
+    const { class: classFilter, search, fee} = req.query;
 
 let query = { status: "ACTIVE" };
 
@@ -711,6 +711,7 @@ if (classFilter) {
 if (search) {
   query.fullName = { $regex: search, $options: "i" };
 }
+
   const total = await Student.countDocuments(query);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
