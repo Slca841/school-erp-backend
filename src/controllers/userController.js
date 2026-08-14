@@ -156,12 +156,28 @@ export const registerUser = async (req, res) => {
 
   try {
     // ✅ User validation
-const query = [{ name }];
-if (email) query.push({ email });
+// ✅ Check duplicate username
+const existingUsername = await User.findOne({ name });
 
-const exists = await User.findOne({ $or: query });
-if (exists) {
-  return res.json({ success: false, message: "User already exists" });
+if (existingUsername) {
+  return res.json({
+    success: false,
+    message: `Username "${name}" already exists. Please use a different username.`,
+  });
+}
+
+// ✅ Check duplicate email
+if (email) {
+  const existingEmail = await User.findOne({
+    email: email.toLowerCase(),
+  });
+
+  if (existingEmail) {
+    return res.json({
+      success: false,
+      message: `Email "${email}" already exists. Please use a different email.`,
+    });
+  }
 }
 
 if (email && !validator.isEmail(email)) {
@@ -193,7 +209,63 @@ const userData = {
 if (email) {
   userData.email = email.toLowerCase();
 }
+if (role === "student") {
 
+  if (scholarNo) {
+    const existing = await Student.findOne({ scholarNo });
+
+    if (existing) {
+      return res.json({
+        success: false,
+        message: `Scholar No "${scholarNo}" already exists for another student.`,
+      });
+    }
+  }
+
+  if (aadharNo) {
+    const existing = await Student.findOne({ aadharNo });
+
+    if (existing) {
+      return res.json({
+        success: false,
+        message: `Aadhaar No "${aadharNo}" already exists for another student.`,
+      });
+    }
+  }
+
+  if (samagraId) {
+    const existing = await Student.findOne({ samagraId });
+
+    if (existing) {
+      return res.json({
+        success: false,
+        message: `Samagra ID "${samagraId}" already exists for another student.`,
+      });
+    }
+  }
+
+  if (penNo) {
+    const existing = await Student.findOne({ penNo });
+
+    if (existing) {
+      return res.json({
+        success: false,
+        message: `PEN No "${penNo}" already exists for another student.`,
+      });
+    }
+  }
+
+  if (apaarId) {
+    const existing = await Student.findOne({ apaarId });
+
+    if (existing) {
+      return res.json({
+        success: false,
+        message: `APAAR ID "${apaarId}" already exists for another student.`,
+      });
+    }
+  }
+}
 const user = await User.create(userData);
 
 
@@ -237,6 +309,7 @@ await StudentFees.create({
       });
     }
 
+    
     // ✅ Teacher registration (no coordinator)
     if (role === "teacher") {
       const teacher = await Teacher.create({
