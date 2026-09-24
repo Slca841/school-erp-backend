@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-
+import Class from "../models/classAssign.js";
 // controllers/teacherController.js
 import Teacher from "../models/TeacherModel.js";
 import TeacherComplaint from "../models/TeacherComplaint.js";
@@ -94,7 +94,10 @@ export const deleteTeacher = async (req, res) => {
     if (!teacher) {
       return res.status(404).json({ success: false, message: "Teacher not found" });
     }
-
+   await Class.updateMany(
+      { teacherId: id },
+      { $unset: { teacherId: "" } }
+    );
     // 1️⃣ Delete User account (login)
     if (teacher.userId) {
       await User.findByIdAndDelete(teacher.userId);

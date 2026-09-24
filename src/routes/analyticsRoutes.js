@@ -15,7 +15,7 @@ import {
   getTCStudents 
 } from "../controllers/analyticsController.js";
 
-import { approveTC, getStudentTC, getAllTCs, studentTcs } from "../controllers/tcGenerator.js";
+import { approveTC, getStudentTC, getAllTCs, studentTcs, previewTC, } from "../controllers/tcGenerator.js";
 
 const analyticsRoutes = express.Router();
 
@@ -35,7 +35,7 @@ analyticsRoutes.put("/student/:id", updateStudent);
 
 analyticsRoutes.get("/birthdays/today", getTodaysBirthdays);
 
-
+analyticsRoutes.get("/preview/:id", previewTC);
 analyticsRoutes.put("/tc/:id", approveTC);
 analyticsRoutes.get("/tc/:id", getStudentTC);
 analyticsRoutes.get("/tc", getAllTCs);

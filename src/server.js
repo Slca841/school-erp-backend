@@ -24,6 +24,9 @@ import helmet from "helmet";
 import compression from "compression";
 import secureRouter from "./routes/authRoutes.js";
 import reportRouter from "./routes/studentRiskReportRoutes.js";
+import academicSessionRoutes from "./routes/academicSessionRoutes.js";
+import studentSessionFeeRoutes from "./routes/studentSessionFeeRoutes.js";
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); 
@@ -166,7 +169,10 @@ app.use(
   },
   homeworkRouter
 );
-
+app.use(
+  "/api/academic-sessions",
+  academicSessionRoutes
+);
 // Fee router
 app.use(
   "/api/fee",
@@ -176,7 +182,10 @@ app.use(
   },
   feeReminderRouter
 );
-
+app.use(
+  "/api/students",
+  studentSessionFeeRoutes
+);
 // ----------------------
 // BASE ROUTE
 // ----------------------
