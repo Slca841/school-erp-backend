@@ -215,17 +215,61 @@ export const getPaymentsByStudent = async (req, res) => {
 // 📌 Update a payment
 export const updatePayment = async (req, res) => {
   try {
-    const { id } = req.params; // paymentId
-    const updated = await StudentFeePayment.findByIdAndUpdate(id, req.body, { new: true });
+    const { id } = req.params;
 
-    if (!updated) return res.status(404).json({ success: false, message: "Payment not found" });
+    const payment =
+      await StudentFeePayment.findById(id);
 
-    res.status(200).json({ success: true, message: "Payment updated", payment: updated });
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found",
+      });
+    }
+
+    // Receipt number kabhi change nahi hoga
+    if (req.body.receiptNumber !== undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Receipt number cannot be changed",
+      });
+    }
+
+    // Sirf ye fields update ho sakti hain
+    const allowedFields = [
+      "paidAmount",
+      "year",
+      "installment",
+      "date",
+    ];
+
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        payment[field] = req.body[field];
+      }
+    });
+
+    await payment.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Payment updated",
+      payment,
+    });
+
   } catch (err) {
-    res.status(500).json({ success: false, message: "Error updating payment", error: err.message });
+    console.error(
+      "UPDATE PAYMENT ERROR:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Error updating payment",
+      error: err.message,
+    });
   }
 };
-
 // 📌 Delete a payment
 export const deletePayment = async (req, res) => {
   try {
