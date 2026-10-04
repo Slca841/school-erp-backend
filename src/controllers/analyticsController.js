@@ -21,7 +21,10 @@ import LeaveApplication from "../models/LeaveApplication.js";
 import Notice from "../models/Notice.js";
 import FeeReminder from "../models/FeeReminderModel.js";
 import TransferCertificate from "../models/tcGenerator.js";
-
+import {
+  syncStudentCurrentSessionFee,
+  syncStudentFeeChain
+} from "../services/studentFeeSyncService.js";
 const deleteOldStudentData = async (studentId, oldClass, session = null) => {
   const options = session ? { session } : {};
 
@@ -202,24 +205,279 @@ const saveSessionFeeSnapshot = async ({
 /* -------------------------------------------------------------------------- */
 export const setOrUpdateClassFee = async (req, res) => {
   try {
-    const { className, feeType, feeAmount } = req.body;
-    if (!className || !feeType)
-      return res.status(400).json({ success: false, message: "Missing parameters" });
+    const {
+      className,
+      yearlyFee,
+      examFee,
+      smartClassFee,
+      admissionFee,
+      annualFunctionFee,
+      diaryFee,
+      identityCardFee,
+      panalty,
+      otherCharges,
+      transportationFee,
+    } = req.body;
 
-    let feeDoc = await ClassFeeMaster.findOne({ className });
-    if (!feeDoc) feeDoc = new ClassFeeMaster({ className });
+    if (!className) {
+      return res.status(400).json({
+        message: "className is required",
+      });
+    }
 
-    feeDoc[feeType] = Number(feeAmount || 0);
-    await feeDoc.save();
+    // 1. Update / create ClassFeeMaster
+    const feeDoc = await ClassFeeMaster.findOneAndUpdate(
+      {
+        className: {
+          $regex: `^${className}$`,
+          $options: "i",
+        },
+      },
+      {
+        className,
+        yearlyFee: Number(yearlyFee || 0),
+        examFee: Number(examFee || 0),
+        smartClassFee: Number(smartClassFee || 0),
+        admissionFee: Number(admissionFee || 0),
+        annualFunctionFee: Number(annualFunctionFee || 0),
+        diaryFee: Number(diaryFee || 0),
+        identityCardFee: Number(identityCardFee || 0),
+        panalty: Number(panalty || 0),
+        otherCharges: Number(otherCharges || 0),
+        transportationFee: Number(transportationFee || 0),
+      },
+      {
+        new: true,
+        upsert: true,
+      }
+    );
+// ==========================================
+// GET SELECTED ACADEMIC SESSION
+// ==========================================
 
-    res.json({
-      success: true,
-      message: `Updated ${feeType} for ${className}`,
-      data: feeDoc,
+const currentSession =
+  await AcademicSession.findById(sessionId);
+
+if (!currentSession) {
+  return res.status(400).json({
+    success: false,
+    message: "Selected academic session not found",
+  });
+}
+
+    // 3. Find students of this class
+    const students = await Student.find({
+      studentclass: {
+        $regex: `^${className}$`,
+        $options: "i",
+      },
+      status: { $ne: "inactive" },
     });
-  } catch (err) {
-    console.error("❌ setOrUpdateClassFee error:", err);
-    res.status(500).json({ success: false });
+
+    const updatedStudents = [];
+
+    // 4. Update CURRENT session only
+    for (const student of students) {
+      let studentFees = await StudentFees.findOne({
+        studentId: student._id,
+      });
+
+      if (!studentFees) {
+        studentFees = new StudentFees({
+          studentId: student._id,
+        });
+      }
+
+      const getFee = (studentValue, masterValue) => {
+        return Number(studentValue || 0) > 0
+          ? Number(studentValue)
+          : Number(masterValue || 0);
+      };
+
+      // Yearly fee currently comes only from ClassFeeMaster
+      const yearlyFeeValue = Number(feeDoc.yearlyFee || 0);
+
+      const examFeeValue = getFee(
+        studentFees.examFee,
+        feeDoc.examFee
+      );
+
+      const admissionFeeValue = getFee(
+        studentFees.admissionFee,
+        feeDoc.admissionFee
+      );
+
+      const smartClassFeeValue = getFee(
+        studentFees.smartClassFee,
+        feeDoc.smartClassFee
+      );
+
+      const annualFunctionFeeValue = getFee(
+        studentFees.annualFunctionFee,
+        feeDoc.annualFunctionFee
+      );
+
+      const diaryFeeValue = getFee(
+        studentFees.diaryFee,
+        feeDoc.diaryFee
+      );
+
+      const identityCardFeeValue = getFee(
+        studentFees.identityCardFee,
+        feeDoc.identityCardFee
+      );
+
+      const panaltyValue = getFee(
+        studentFees.panalty,
+        feeDoc.panalty
+      );
+
+      const otherChargesValue = getFee(
+        studentFees.otherCharges,
+        feeDoc.otherCharges
+      );
+
+      const transportationFeeValue = getFee(
+        studentFees.transportationFee,
+        feeDoc.transportationFee
+      );
+
+      // 5. Find current session snapshot
+      let currentSnapshot =
+        studentFees.sessionWiseFees.find(
+          (item) =>
+            item.sessionId.toString() ===
+            currentSession._id.toString()
+        );
+
+      // If snapshot does not exist, create it
+      if (!currentSnapshot) {
+        let previousYearFee = 0;
+
+        const previousSession = await AcademicSession.findOne({
+          startYear: {
+            $lt: currentSession.startYear,
+          },
+        }).sort({ startYear: -1 });
+
+        if (previousSession) {
+          const previousSnapshot =
+            studentFees.sessionWiseFees.find(
+              (item) =>
+                item.sessionId.toString() ===
+                previousSession._id.toString()
+            );
+
+          previousYearFee =
+            Number(previousSnapshot?.remainingAmount || 0);
+        }
+
+        currentSnapshot = {
+          sessionId: currentSession._id,
+          sessionName: currentSession.name,
+
+          yearlyFee: yearlyFeeValue,
+          previousYearFee,
+
+          examFee: examFeeValue,
+          admissionFee: admissionFeeValue,
+          smartClassFee: smartClassFeeValue,
+          annualFunctionFee: annualFunctionFeeValue,
+          diaryFee: diaryFeeValue,
+          identityCardFee: identityCardFeeValue,
+          panalty: panaltyValue,
+          otherCharges: otherChargesValue,
+          transportationFee: transportationFeeValue,
+
+          discount: Number(studentFees.discount || 0),
+
+          totalFee: 0,
+          paidAmount: 0,
+          remainingAmount: 0,
+        };
+
+        studentFees.sessionWiseFees.push(currentSnapshot);
+
+        currentSnapshot =
+          studentFees.sessionWiseFees[
+            studentFees.sessionWiseFees.length - 1
+          ];
+      } else {
+        // Existing CURRENT session snapshot
+        // Previous year fee should NOT change
+        currentSnapshot.yearlyFee = yearlyFeeValue;
+
+        currentSnapshot.examFee = examFeeValue;
+        currentSnapshot.admissionFee = admissionFeeValue;
+        currentSnapshot.smartClassFee = smartClassFeeValue;
+        currentSnapshot.annualFunctionFee =
+          annualFunctionFeeValue;
+        currentSnapshot.diaryFee = diaryFeeValue;
+        currentSnapshot.identityCardFee =
+          identityCardFeeValue;
+        currentSnapshot.panalty = panaltyValue;
+        currentSnapshot.otherCharges = otherChargesValue;
+        currentSnapshot.transportationFee =
+          transportationFeeValue;
+      }
+
+      // 6. Recalculate total
+      currentSnapshot.totalFee =
+        Number(currentSnapshot.yearlyFee || 0) +
+        Number(currentSnapshot.previousYearFee || 0) +
+        Number(currentSnapshot.examFee || 0) +
+        Number(currentSnapshot.admissionFee || 0) +
+        Number(currentSnapshot.smartClassFee || 0) +
+        Number(currentSnapshot.annualFunctionFee || 0) +
+        Number(currentSnapshot.diaryFee || 0) +
+        Number(currentSnapshot.identityCardFee || 0) +
+        Number(currentSnapshot.panalty || 0) +
+        Number(currentSnapshot.otherCharges || 0) +
+        Number(currentSnapshot.transportationFee || 0) -
+        Number(currentSnapshot.discount || 0);
+
+      // 7. Get payments of CURRENT session
+      const payments = await StudentFeePayment.find({
+        studentId: student._id,
+        sessionId: currentSession._id,
+      });
+
+      const paidAmount = payments.reduce(
+        (sum, payment) =>
+          sum + Number(payment.paidAmount || 0),
+        0
+      );
+
+      currentSnapshot.paidAmount = paidAmount;
+
+      currentSnapshot.remainingAmount =
+        Math.max(
+          Number(currentSnapshot.totalFee || 0) -
+            paidAmount,
+          0
+        );
+
+      await studentFees.save();
+
+      updatedStudents.push({
+        studentId: student._id,
+        studentName: student.name,
+      });
+    }
+
+    return res.json({
+      message:
+        "Class fee updated and current session fees synchronized.",
+      feeMaster: feeDoc,
+      updatedStudents,
+    });
+  } catch (error) {
+    console.error("setOrUpdateClassFee error:", error);
+
+    return res.status(500).json({
+      message: "Failed to update class fee",
+      error: error.message,
+    });
   }
 };
 /* =========================================================
@@ -293,28 +551,91 @@ for (const s of realStudents) {
 export const updateOtherFees = async (req, res) => {
   try {
     const { id } = req.params;
+    const { sessionId } = req.body;
 
     // ==========================================
-    // STUDENT FEE UPDATE
+    // VALIDATION
+    // ==========================================
+
+    if (!sessionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Academic session is required",
+      });
+    }
+
+    // ==========================================
+    // GET SELECTED SESSION
+    // ==========================================
+
+    const selectedSession =
+      await AcademicSession.findById(sessionId);
+
+    if (!selectedSession) {
+      return res.status(404).json({
+        success: false,
+        message: "Selected academic session not found",
+      });
+    }
+
+    // ==========================================
+    // GET STUDENT
+    // ==========================================
+
+    const student = await Student.findById(id);
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    // ==========================================
+    // PAYLOAD
     // ==========================================
 
     const payload = {
-      previousYearFee: Number(req.body.previousYearFee || 0),
-      examFee: Number(req.body.examFee || 0),
-      admissionFee: Number(req.body.admissionFee || 0),
-      smartClassFee: Number(req.body.smartClassFee || 0),
+      previousYearFee: Number(
+        req.body.previousYearFee || 0
+      ),
+
+      examFee: Number(
+        req.body.examFee || 0
+      ),
+
+      admissionFee: Number(
+        req.body.admissionFee || 0
+      ),
+
+      smartClassFee: Number(
+        req.body.smartClassFee || 0
+      ),
+
       annualFunctionFee: Number(
         req.body.annualFunctionFee || 0
       ),
-      diaryFee: Number(req.body.diaryFee || 0),
+
+      diaryFee: Number(
+        req.body.diaryFee || 0
+      ),
+
       identityCardFee: Number(
         req.body.identityCardFee || 0
       ),
-      panalty: Number(req.body.panalty || 0),
+
+      panalty: Number(
+        req.body.panalty || 0
+      ),
+
       otherCharges: Number(
         req.body.otherCharges || 0
       ),
-      discount: Number(req.body.discount || 0),
+
+      discount: Number(
+        req.body.discount || 0
+      ),
+
       transportationFee: Number(
         req.body.transportationFee || 0
       ),
@@ -331,155 +652,172 @@ export const updateOtherFees = async (req, res) => {
     if (!fees) {
       fees = new StudentFees({
         studentId: id,
-        ...payload,
         sessionWiseFees: [],
-      });
-
-      await fees.save();
-
-      return res.json({
-        success: true,
-        message: "Student fees updated successfully",
-        fees,
       });
     }
 
     // ==========================================
-    // UPDATE ROOT STUDENT FEE
+    // FIND SELECTED SESSION SNAPSHOT
     // ==========================================
 
-    Object.assign(fees, payload);
+    let selectedSnapshot =
+      fees.sessionWiseFees.find(
+        (item) =>
+          item.sessionId?.toString() ===
+          selectedSession._id.toString()
+      );
 
     // ==========================================
-    // GET CURRENT ACADEMIC SESSION
+    // IF SNAPSHOT DOES NOT EXIST
     // ==========================================
 
-    const currentSession =
-      await AcademicSession.findOne({
-        isCurrent: true,
-        status: "ACTIVE",
+    if (!selectedSnapshot) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Fee snapshot not found for selected session",
+      });
+    }
+
+    // ==========================================
+    // KEEP YEARLY FEE
+    // ==========================================
+
+    const yearlyFee = Number(
+      selectedSnapshot.yearlyFee || 0
+    );
+
+    // ==========================================
+    // UPDATE SELECTED SESSION FEES
+    // ==========================================
+
+    selectedSnapshot.examFee =
+      payload.examFee;
+
+    selectedSnapshot.admissionFee =
+      payload.admissionFee;
+
+    selectedSnapshot.smartClassFee =
+      payload.smartClassFee;
+
+    selectedSnapshot.annualFunctionFee =
+      payload.annualFunctionFee;
+
+    selectedSnapshot.diaryFee =
+      payload.diaryFee;
+
+    selectedSnapshot.identityCardFee =
+      payload.identityCardFee;
+
+    selectedSnapshot.panalty =
+      payload.panalty;
+
+    selectedSnapshot.otherCharges =
+      payload.otherCharges;
+
+    selectedSnapshot.transportationFee =
+      payload.transportationFee;
+
+    selectedSnapshot.discount =
+      payload.discount;
+
+    selectedSnapshot.previousYearFee =
+      payload.previousYearFee;
+
+    // ==========================================
+    // RECALCULATE TOTAL
+    // ==========================================
+
+    const totalFee =
+      yearlyFee +
+      Number(selectedSnapshot.previousYearFee || 0) +
+      Number(selectedSnapshot.examFee || 0) +
+      Number(selectedSnapshot.admissionFee || 0) +
+      Number(selectedSnapshot.smartClassFee || 0) +
+      Number(selectedSnapshot.annualFunctionFee || 0) +
+      Number(selectedSnapshot.diaryFee || 0) +
+      Number(selectedSnapshot.identityCardFee || 0) +
+      Number(selectedSnapshot.panalty || 0) +
+      Number(selectedSnapshot.otherCharges || 0) +
+      Number(selectedSnapshot.transportationFee || 0) -
+      Number(selectedSnapshot.discount || 0);
+
+    selectedSnapshot.totalFee =
+      Math.max(totalFee, 0);
+
+    // ==========================================
+    // GET PAYMENTS FOR SELECTED SESSION
+    // ==========================================
+
+    const payments =
+      await StudentFeePayment.find({
+        studentId: id,
+        sessionId: selectedSession._id,
       });
 
+    const totalPaid =
+      payments.reduce(
+        (sum, payment) =>
+          sum + Number(payment.paidAmount || 0),
+        0
+      );
+
+    selectedSnapshot.paidAmount =
+      totalPaid;
+
+    selectedSnapshot.remainingAmount =
+      Math.max(
+        selectedSnapshot.totalFee -
+          totalPaid,
+        0
+      );
+
     // ==========================================
-    // UPDATE CURRENT SESSION SNAPSHOT
+    // UPDATE ROOT FIELDS
+    // ONLY FOR CURRENT SESSION
     // ==========================================
 
-    if (currentSession) {
-      const currentSnapshot =
-        fees.sessionWiseFees.find(
-          (item) =>
-            item.sessionId?.toString() ===
-            currentSession._id.toString()
-        );
+    if (selectedSession.isCurrent === true) {
+      fees.previousYearFee =
+        selectedSnapshot.previousYearFee;
 
-      if (currentSnapshot) {
+      fees.examFee =
+        selectedSnapshot.examFee;
 
-        // ----------------------------------------
-        // Keep current session's yearly fee
-        // ----------------------------------------
+      fees.admissionFee =
+        selectedSnapshot.admissionFee;
 
-        const yearlyFee =
-          Number(currentSnapshot.yearlyFee || 0);
+      fees.smartClassFee =
+        selectedSnapshot.smartClassFee;
 
-        // ----------------------------------------
-        // Previous Year Fee stays session-based
-        // ----------------------------------------
+      fees.annualFunctionFee =
+        selectedSnapshot.annualFunctionFee;
 
-        const previousYearFee =
-          Number(
-            currentSnapshot.previousYearFee || 0
-          );
+      fees.diaryFee =
+        selectedSnapshot.diaryFee;
 
-        // ----------------------------------------
-        // Student-specific fees
-        // ----------------------------------------
+      fees.identityCardFee =
+        selectedSnapshot.identityCardFee;
 
-        currentSnapshot.examFee =
-          payload.examFee;
+      fees.panalty =
+        selectedSnapshot.panalty;
 
-        currentSnapshot.admissionFee =
-          payload.admissionFee;
+      fees.otherCharges =
+        selectedSnapshot.otherCharges;
 
-        currentSnapshot.smartClassFee =
-          payload.smartClassFee;
+      fees.transportationFee =
+        selectedSnapshot.transportationFee;
 
-        currentSnapshot.annualFunctionFee =
-          payload.annualFunctionFee;
-
-        currentSnapshot.diaryFee =
-          payload.diaryFee;
-
-        currentSnapshot.identityCardFee =
-          payload.identityCardFee;
-
-        currentSnapshot.panalty =
-          payload.panalty;
-
-        currentSnapshot.otherCharges =
-          payload.otherCharges;
-
-        currentSnapshot.transportationFee =
-          payload.transportationFee;
-
-        currentSnapshot.discount =
-          payload.discount;
-
-        // ----------------------------------------
-        // Recalculate total
-        // ----------------------------------------
-
-        const totalFee =
-          yearlyFee +
-          previousYearFee +
-          payload.examFee +
-          payload.admissionFee +
-          payload.smartClassFee +
-          payload.annualFunctionFee +
-          payload.diaryFee +
-          payload.identityCardFee +
-          payload.panalty +
-          payload.otherCharges +
-          payload.transportationFee -
-          payload.discount;
-
-        currentSnapshot.totalFee =
-          Math.max(totalFee, 0);
-
-        // ----------------------------------------
-        // PAYMENT IS SOURCE OF TRUTH
-        // ----------------------------------------
-
-        const payments =
-          await StudentFeePayment.find({
-            studentId: id,
-            sessionId: currentSession._id,
-          });
-
-        const totalPaid =
-          payments.reduce(
-            (sum, payment) =>
-              sum +
-              Number(payment.paidAmount || 0),
-            0
-          );
-
-        currentSnapshot.paidAmount =
-          totalPaid;
-
-        currentSnapshot.remainingAmount =
-          Math.max(
-            currentSnapshot.totalFee -
-              totalPaid,
-            0
-          );
-      }
+      fees.discount =
+        selectedSnapshot.discount;
     }
 
     // ==========================================
     // SAVE
     // ==========================================
+await fees.save();
 
-    await fees.save();
+await syncStudentFeeChain(id);
 
     // ==========================================
     // RESPONSE
@@ -577,7 +915,7 @@ export const upgradeOrDegradeClass = async (req, res) => {
         continue;
       }
 
-      const oldClass = student.class;
+    const oldClass = student.studentclass;
 
       // ----------------------------------------------
       // Student Fee Record
@@ -834,7 +1172,7 @@ export const upgradeOrDegradeClass = async (req, res) => {
       // CHANGE STUDENT CLASS
       // ----------------------------------------------
 
-      student.class = newClass;
+    student.studentclass = newClass;
 
       await student.save({
         session,
@@ -1041,6 +1379,10 @@ export const getSingleStudentWithFeeDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // ==========================================
+    // STUDENT
+    // ==========================================
+
     const student = await Student.findById(id).populate(
       "userId",
       "name email originalPassword role isActive"
@@ -1062,48 +1404,22 @@ export const getSingleStudentWithFeeDetails = async (req, res) => {
     });
 
     // ==========================================
-    // CLASS FEE
-    // ==========================================
-
-    const classFee = await ClassFeeMaster.findOne({
-      className: student.studentclass,
-    });
-
-    const effective = getEffectiveFee(
-      fee,
-      classFee
-    );
-
-    // ==========================================
     // PAYMENTS
     // ==========================================
 
-    let totalPaid = 0;
     let payments = [];
 
-    // TC APPROVED → snapshot use karo
-    if (student.status === "TC_APPROVED") {
-      const tc =
-        await TransferCertificate.findOne({
-          studentId: id,
-        });
-
-      totalPaid =
-        Number(tc?.totalPaidAmount || 0);
-    } else {
-      // ACTIVE → live payments
-      payments =
-        await StudentFeePayment.find({
-          studentId: id,
-        }).sort({
+    if (student.status !== "TC_APPROVED") {
+      payments = await StudentFeePayment.find({
+        studentId: id,
+      })
+        .populate(
+          "sessionId",
+          "name startYear endYear isCurrent"
+        )
+        .sort({
           date: -1,
         });
-
-      totalPaid = payments.reduce(
-        (sum, p) =>
-          sum + Number(p.paidAmount || 0),
-        0
-      );
     }
 
     // ==========================================
@@ -1114,91 +1430,167 @@ export const getSingleStudentWithFeeDetails = async (req, res) => {
       fee?.sessionWiseFees || [];
 
     // ==========================================
+    // CURRENT SESSION
+    // ==========================================
+
+    const currentSession =
+      sessionWiseFees.find(
+        (sessionFee) =>
+          sessionFee.sessionId?.isCurrent === true
+      ) ||
+      sessionWiseFees[sessionWiseFees.length - 1] ||
+      null;
+
+    // ==========================================
+    // CURRENT SESSION VALUES
+    // ==========================================
+
+    const currentYearlyFee =
+      Number(currentSession?.yearlyFee || 0);
+
+    const currentPreviousYearFee =
+      Number(currentSession?.previousYearFee || 0);
+
+    const currentExamFee =
+      Number(currentSession?.examFee || 0);
+
+    const currentAdmissionFee =
+      Number(currentSession?.admissionFee || 0);
+
+    const currentSmartClassFee =
+      Number(currentSession?.smartClassFee || 0);
+
+    const currentAnnualFunctionFee =
+      Number(currentSession?.annualFunctionFee || 0);
+
+    const currentDiaryFee =
+      Number(currentSession?.diaryFee || 0);
+
+    const currentIdentityCardFee =
+      Number(currentSession?.identityCardFee || 0);
+
+    const currentPanalty =
+      Number(currentSession?.panalty || 0);
+
+    const currentOtherCharges =
+      Number(currentSession?.otherCharges || 0);
+
+    const currentTransportationFee =
+      Number(currentSession?.transportationFee || 0);
+
+    const currentDiscount =
+      Number(currentSession?.discount || 0);
+
+    const currentTotalFee =
+      Number(currentSession?.totalFee || 0);
+
+    const currentPaidAmount =
+      Number(currentSession?.paidAmount || 0);
+
+    const currentRemainingAmount =
+      Number(currentSession?.remainingAmount || 0);
+
+    const currentOtherFees =
+      currentExamFee +
+      currentAdmissionFee +
+      currentSmartClassFee +
+      currentAnnualFunctionFee +
+      currentDiaryFee +
+      currentIdentityCardFee +
+      currentPanalty +
+      currentOtherCharges +
+      currentTransportationFee;
+
+    // ==========================================
     // RESPONSE
     // ==========================================
 
-    res.json({
+    return res.json({
       success: true,
 
       student: {
         ...student._doc,
 
         // ======================================
-        // EXISTING ROOT FEE DATA
+        // CURRENT SESSION FEE
         // ======================================
 
-        yearlyFee:
-          effective.yearlyFee,
+        yearlyFee: currentYearlyFee,
 
         previousYearFee:
-          effective.previousYearFee,
+          currentPreviousYearFee,
 
         examFee:
-          effective.examFee,
+          currentExamFee,
 
         admissionFee:
-          effective.admissionFee,
+          currentAdmissionFee,
 
         smartClassFee:
-          effective.smartClassFee,
+          currentSmartClassFee,
 
         annualFunctionFee:
-          effective.annualFunctionFee,
+          currentAnnualFunctionFee,
 
         diaryFee:
-          effective.diaryFee,
+          currentDiaryFee,
 
         identityCardFee:
-          effective.identityCardFee,
+          currentIdentityCardFee,
 
         panalty:
-          effective.panalty,
+          currentPanalty,
 
         otherCharges:
-          effective.otherCharges,
+          currentOtherCharges,
 
         transportationFee:
-          effective.transportationFee,
+          currentTransportationFee,
 
         otherFees:
-          effective.otherFees,
+          currentOtherFees,
 
         discount:
-          effective.discount,
+          currentDiscount,
 
         totalFee:
-          effective.totalFee,
+          currentTotalFee,
 
-        totalPaid,
+        totalPaid:
+          currentPaidAmount,
 
         remainingFee:
-          Math.max(
-            Number(effective.totalFee || 0) -
-              totalPaid,
-            0
-          ),
-
-        monthlyPayments: payments,
+          currentRemainingAmount,
 
         // ======================================
-        // 🔥 SESSION WISE FEE DATA
+        // PAYMENT HISTORY
+        // ======================================
+
+        monthlyPayments:
+          payments,
+
+        // ======================================
+        // ALL SESSION FEE HISTORY
         // ======================================
 
         fees: {
-          sessionWiseFees,
+          sessionWiseFees:
+            sessionWiseFees,
         },
       },
     });
+
   } catch (err) {
     console.error(
       "❌ getSingleStudentWithFeeDetails error:",
       err
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message:
         "Failed to fetch student fee details",
+      error: err.message,
     });
   }
 };

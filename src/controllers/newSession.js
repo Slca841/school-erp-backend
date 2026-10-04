@@ -6,9 +6,6 @@ import LeaveApplication from "../models/LeaveApplication.js";
 import FeeReminder from "../models/FeeReminderModel.js";
 import Event from "../models/EventModel.js";
 
-// 🔥 ADD THIS
-import StudentFeePayment from "../models/StudentFeePayment.js";
-
 // --------------------------------------------
 // 📌 START NEW SESSION (DELETE OLD DATA + PAYMENT)
 // --------------------------------------------
@@ -23,8 +20,6 @@ export const startNewSession = async (req, res) => {
     await FeeReminder.deleteMany({});
     await Event.deleteMany({});
 
-    // ❌ PAYMENT HISTORY (CARRY FORWARD LOGIC IS ELSEWHERE)
-    await StudentFeePayment.deleteMany({});
 
     res.status(200).json({
       success: true,

@@ -2,6 +2,7 @@ import StudentFeePayment from "../models/StudentFeePayment.js";
 import Counter from "../models/Counter.js";
 import StudentFees from "../models/StudentFees.js";
 import AcademicSession from "../models/AcademicSession.js";
+import { syncStudentFeeChain } from "../services/studentFeeSyncService.js";
 // ========================================
 // ADD PAYMENT
 // ========================================
@@ -9,42 +10,41 @@ import AcademicSession from "../models/AcademicSession.js";
 export const addPayment = async (req, res) => {
   try {
     const {
-      studentId,
-      paidAmount,
-      installment,
-      year,
-    } = req.body;
+  studentId,
+  paidAmount,
+  installment,
+  year,
+  sessionId,
+} = req.body;
 
-    if (
-      !studentId ||
-      !paidAmount ||
-      !installment ||
-      !year
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "StudentId, paidAmount, installment and year are required",
-      });
-    }
+if (
+  !studentId ||
+  !paidAmount ||
+  !installment ||
+  !year ||
+  !sessionId
+) {
+  return res.status(400).json({
+    success: false,
+    message:
+      "StudentId, paidAmount, installment, year and sessionId are required",
+  });
+}
 
     /* ==========================================
        1. CURRENT ACADEMIC SESSION
     ========================================== */
 
-    const currentSession =
-      await AcademicSession.findOne({
-        isCurrent: true,
-        status: "ACTIVE",
-      });
+const selectedSession =
+  await AcademicSession.findById(sessionId);
 
-    if (!currentSession) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Current academic session not found",
-      });
-    }
+if (!selectedSession) {
+  return res.status(400).json({
+    success: false,
+    message: "Selected academic session not found",
+  });
+}
+
 
     /* ==========================================
        2. CHECK STUDENT
@@ -67,20 +67,24 @@ export const addPayment = async (req, res) => {
        3. CURRENT SESSION SNAPSHOT
     ========================================== */
 
-    const sessionFee =
-      feeRecord.sessionWiseFees.find(
-        (item) =>
-          item.sessionId?.toString() ===
-          currentSession._id.toString()
-      );
+/* ==========================================
+   3. SELECTED SESSION FEE SNAPSHOT
+========================================== */
 
-    if (!sessionFee) {
-      return res.status(400).json({
-        success: false,
-        message:
-          `Fee snapshot not found for current session ${currentSession.name}`,
-      });
-    }
+const sessionFee =
+  feeRecord.sessionWiseFees.find(
+    (item) =>
+      item.sessionId?.toString() ===
+      sessionId.toString()
+  );
+
+if (!sessionFee) {
+  return res.status(400).json({
+    success: false,
+    message:
+      `Fee snapshot not found for selected session ${selectedSession.name}`,
+  });
+}
 
     /* ==========================================
        4. RECEIPT NUMBER
@@ -114,10 +118,8 @@ export const addPayment = async (req, res) => {
         year:
           Number(year),
 
-        // 🔥 AUTOMATIC CURRENT SESSION
-        sessionId:
-          currentSession._id,
-
+        // SESSION
+        sessionId: selectedSession._id,
         receiptNumber,
       });
 
@@ -127,11 +129,11 @@ export const addPayment = async (req, res) => {
        6. RECALCULATE CURRENT SESSION PAYMENTS
     ========================================== */
 
-    const sessionPayments =
-      await StudentFeePayment.find({
-        studentId,
-        sessionId: currentSession._id,
-      });
+const sessionPayments =
+  await StudentFeePayment.find({
+    studentId,
+    sessionId: selectedSession._id,
+  });
 
     const totalPaid =
       sessionPayments.reduce(
@@ -157,6 +159,7 @@ export const addPayment = async (req, res) => {
 
     await feeRecord.save();
 
+await syncStudentFeeChain(studentId);
     /* ==========================================
        8. RESPONSE
     ========================================== */
@@ -169,10 +172,10 @@ export const addPayment = async (req, res) => {
 
       payment,
 
-      session: {
-        _id: currentSession._id,
-        name: currentSession.name,
-      },
+  session: {
+  _id: selectedSession._id,
+  name: selectedSession.name,
+},
 
       sessionFee: {
         totalFee:
@@ -204,7 +207,10 @@ export const getPaymentsByStudent = async (req, res) => {
   try {
     const { studentId } = req.params;
 
-    const payments = await StudentFeePayment.find({ studentId }).sort({ date: -1 });
+   const payments =
+  await StudentFeePayment.find({ studentId })
+    .populate("sessionId", "name startYear endYear isCurrent")
+    .sort({ date: -1 });
 
     res.status(200).json({ success: true, payments });
   } catch (err) {
@@ -249,9 +255,55 @@ export const updatePayment = async (req, res) => {
       }
     });
 
-    await payment.save();
+await payment.save();
 
-    return res.status(200).json({
+/* ==========================================
+   RECALCULATE SESSION PAYMENT
+========================================== */
+
+const feeRecord =
+  await StudentFees.findOne({
+    studentId: payment.studentId,
+  });
+
+if (feeRecord && payment.sessionId) {
+  const sessionFee =
+    feeRecord.sessionWiseFees.find(
+      (item) =>
+        item.sessionId?.toString() ===
+        payment.sessionId.toString()
+    );
+
+  if (sessionFee) {
+    const sessionPayments =
+      await StudentFeePayment.find({
+        studentId: payment.studentId,
+        sessionId: payment.sessionId,
+      });
+
+    const totalPaid =
+      sessionPayments.reduce(
+        (sum, p) =>
+          sum + Number(p.paidAmount || 0),
+        0
+      );
+
+    sessionFee.paidAmount = totalPaid;
+
+    sessionFee.remainingAmount =
+      Math.max(
+        Number(sessionFee.totalFee || 0) -
+          totalPaid,
+        0
+      );
+
+    await feeRecord.save();
+  }
+}
+
+// ✅ Recalculate chain AFTER session payment is updated
+await syncStudentFeeChain(payment.studentId);
+return res.status(200).json({
       success: true,
       message: "Payment updated",
       payment,
@@ -334,6 +386,10 @@ export const deletePayment = async (req, res) => {
           );
 
         await feeRecord.save();
+ 
+await syncStudentFeeChain(
+  deleted.studentId
+);
       }
     }
 

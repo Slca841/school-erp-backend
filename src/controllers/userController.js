@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import validator from "validator";
 import StudentFees from "../models/StudentFees.js";
-import ClassFeeMaster from "../models/ClassFeeMaster.js";
+import { syncStudentCurrentSessionFee } from "../services/studentFeeSyncService.js";
 // ✅ Token generator
 const createToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: "1d" });
@@ -293,14 +293,7 @@ const user = await User.create(userData);
         address,
         status: "ACTIVE",
       });
-const classFee = await ClassFeeMaster.findOne({
-  className: student.studentclass,
-});
-
-await StudentFees.create({
-  studentId: student._id,
-  admissionFee: classFee?.admissionFee || 0,
-});
+await syncStudentCurrentSessionFee(student._id);
       return res.status(201).json({
         success: true,
         message: "Student registered successfully",
@@ -537,15 +530,7 @@ const student = await Student.create({
   guardian: null,
   status: "ACTIVE",
 });
-
-const classFee = await ClassFeeMaster.findOne({
-  className: student.studentclass,
-});
-
-await StudentFees.create({
-  studentId: student._id,
-  admissionFee: classFee?.admissionFee || 0,
-});
+await syncStudentCurrentSessionFee(student._id);
           
         }
 
